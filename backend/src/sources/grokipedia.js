@@ -9,7 +9,7 @@ import * as cheerio from 'cheerio';
  */
 
 const GROKIPEDIA_API_BASE = 'https://grokipedia-api.com/page';
-const GROKIPEDIA_WEB_BASE = 'https://grok.x.ai/grokipedia';
+const GROKIPEDIA_WEB_BASE = 'https://grokipedia.com/page';
 
 /**
  * Fetch Grokipedia article using the official API
@@ -157,41 +157,107 @@ export async function fetchGrokipediaArticleFromWeb(slug) {
 }
 
 /**
- * Fetch Grokipedia article (tries API first, falls back to web scraping)
+ * Fetch Grokipedia article (tries API first, falls back to web scraping on 404)
  * 
  * @param {string} slug - Grokipedia article slug
- * @returns {Promise<Object>} Article object with full content
+ * @returns {Promise<Object>} Article object with limited content
  */
 export async function fetchGrokipediaArticle(slug) {
   try {
-    // Try API first for full article with references
-    return await fetchGrokipediaArticleFromAPI(slug);
-  } catch (apiError) {
-    console.warn('Grokipedia API failed, falling back to web scraping');
+    const url = `${GROKIPEDIA_API_BASE}/${encodeURIComponent(slug)}?extract_refs=true&citations=true`;
     
-    // Fall back to web scraping
-    try {
-      return await fetchGrokipediaArticleFromWeb(slug);
-    } catch (webError) {
-      // Both failed, throw the original API error with context
-      throw new Error(`Failed to fetch Grokipedia article via API and web: ${apiError.message}`);
+    console.log(`Fetching from Grokipedia API: ${url}`);
+    
+    const response = await axios.get(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'GrokipediaTruthAlignment/1.0',
+      },
+      timeout: 20000,
+    });
+    
+    const data = response.data;
+    
+    if (!data.content_text) {
+      throw new Error('No content_text in API response');
     }
+    
+    // Split into sentences and take first 5
+    const sentences = data.content_text
+      .split(/(?<=[.!?])\s+/)
+      .filter(s => s.trim().length > 30)
+      .slice(0, 5);
+    
+    const text = sentences.join(' ');
+    
+    console.log(`✓ Extracted ${sentences.length} sentences (${text.length} chars) from Grokipedia API`);
+    
+    return {
+      source: 'Grokipedia',
+      title: data.title || slug,
+      text,
+      meta: {
+        url: data.url || `https://grokipedia.com/page/${slug}`,
+        slug: data.slug || slug,
+        fetchedAt: new Date().toISOString(),
+        charCount: text.length,
+        wordCount: text.split(/\s+/).length,
+        sentenceCount: sentences.length,
+        referencesCount: data.references_count || 0,
+        references: data.references || [],
+      },
+    };
+  } catch (error) {
+    // If 404, fall back to web scraping
+    if (error.response?.status === 404) {
+      console.warn(`Grokipedia API returned 404 for "${slug}", falling back to web scraping...`);
+      
+      try {
+        const webArticle = await fetchGrokipediaArticleFromWeb(slug);
+        
+        // Limit to first 5 sentences
+        const sentences = webArticle.text
+          .split(/(?<=[.!?])\s+/)
+          .filter(s => s.trim().length > 30)
+          .slice(0, 5);
+        
+        const text = sentences.join(' ');
+        
+        console.log(`✓ Extracted ${sentences.length} sentences (${text.length} chars) from Grokipedia web scraping`);
+        
+        return {
+          ...webArticle,
+          text,
+          meta: {
+            ...webArticle.meta,
+            sentenceCount: sentences.length,
+            charCount: text.length,
+            wordCount: text.split(/\s+/).length,
+          },
+        };
+      } catch (webError) {
+        console.error(`Web scraping also failed for "${slug}":`, webError.message);
+        throw new Error(`Failed to fetch Grokipedia article via API (404) and web scraping: ${webError.message}`);
+      }
+    }
+    
+    console.error(`Grokipedia API fetch failed for "${slug}":`, error.message);
+    throw new Error(`Failed to fetch Grokipedia article: ${error.message}`);
   }
 }
 
 /**
  * Generate a Grokipedia slug from a topic title
- * Converts spaces to hyphens and lowercases
+ * Converts spaces to underscores and keeps original capitalization
  * 
  * @param {string} title - Topic title
  * @returns {string} URL-friendly slug
  */
 export function generateSlug(title) {
   return title
-    .toLowerCase()
     .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
     .trim();
 }
 

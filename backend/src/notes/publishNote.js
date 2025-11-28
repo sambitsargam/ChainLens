@@ -17,7 +17,11 @@ import { getDKG } from '../config/dkgClient.js';
  */
 export async function publishNoteToDKG(note) {
   try {
-    const dkg = getDKG();
+    const dkg = await getDKG();
+    
+    if (!dkg) {
+      throw new Error('DKG client not available. Please start your DKG Edge Node.');
+    }
     
     // Prepare content for DKG
     const content = {
@@ -69,7 +73,7 @@ export async function publishNoteToDKG(note) {
  */
 export async function getAssetByUAL(ual) {
   try {
-    const dkg = getDKG();
+    const dkg = await getDKG();
     
     console.log(`Fetching asset from DKG: ${ual}`);
     

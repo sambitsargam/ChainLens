@@ -91,8 +91,9 @@ export async function fetchWikipediaFullArticle(title) {
       sectionCount++;
     }
     
+    // Only extract first 5 sections to limit comparison size
     if (data.remaining?.sections) {
-      for (const section of data.remaining.sections) {
+      for (const section of data.remaining.sections.slice(0, 5)) {
         if (section.text) {
           const sectionText = section.text.replace(/<[^>]+>/g, ' ');
           text += ' ' + sectionText;
@@ -108,18 +109,27 @@ export async function fetchWikipediaFullArticle(title) {
       throw new Error('Insufficient content extracted from Wikipedia mobile-sections API');
     }
     
-    console.log(`✓ Extracted ${sectionCount} sections, ${text.length} characters from Wikipedia`);
+    // Split into sentences and take first 5 for testing
+    const sentences = text
+      .split(/(?<=[.!?])\s+/)
+      .filter(s => s.trim().length > 30)
+      .slice(0, 5);
+    
+    const limitedText = sentences.join(' ');
+    
+    console.log(`✓ Extracted ${sectionCount} sections, ${sentences.length} sentences (${limitedText.length} chars) from Wikipedia`);
     
     return {
       source: 'Wikipedia',
       title: data.lead?.displaytitle || title,
-      text,
+      text: limitedText,
       meta: {
         url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
         fetchedAt: new Date().toISOString(),
         description: data.lead?.description || '',
-        charCount: text.length,
-        wordCount: text.split(/\s+/).length,
+        charCount: limitedText.length,
+        wordCount: limitedText.split(/\s+/).length,
+        sentenceCount: sentences.length,
         sectionCount,
       },
     };

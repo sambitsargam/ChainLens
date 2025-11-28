@@ -29,7 +29,7 @@ export function splitIntoSentences(text) {
   const sentences = text
     .split(/(?<=[.!?])\s+/)
     .map(s => s.trim())
-    .filter(s => s.length > 10); // Filter out very short fragments
+    .filter(s => s.length > 30); // Filter out short fragments (increased from 10 to 30)
   
   return sentences;
 }
@@ -70,26 +70,39 @@ async function findUnmatchedSentences(sourceSentences, targetSentences, threshol
     return sourceSentences; // All source sentences are unmatched if no target
   }
   
+  // Limit to first 5 sentences to keep processing fast
+  const limitedSource = sourceSentences.slice(0, 5);
+  const limitedTarget = targetSentences.slice(0, 5);
+  
   try {
     // Use batch embedding comparison for efficiency
-    console.log(`  → Comparing ${sourceSentences.length} ${label} sentences using embeddings...`);
+    console.log(`  → Comparing ${limitedSource.length} ${label} sentences using embeddings (limited from ${sourceSentences.length})...`);
     
-    for (let i = 0; i < sourceSentences.length; i++) {
-      const sourceSent = sourceSentences[i];
-      console.log(`    [${i + 1}/${sourceSentences.length}] Analyzing: "${sourceSent.substring(0, 50)}..."`);
+    for (let i = 0; i < limitedSource.length; i++) {
+      const sourceSent = limitedSource[i];
+      console.log(`\n    [${i + 1}/${limitedSource.length}] ${label.toUpperCase()}:`);
+      console.log(`    Source: "${sourceSent.substring(0, 80)}..."`);
       
       // Compare this sentence against all target sentences using embeddings
-      const batchResults = await batchCompareWithEmbeddings(sourceSent, targetSentences);
+      const batchResults = await batchCompareWithEmbeddings(sourceSent, limitedTarget);
       
-      // Find the highest similarity score
+      // Find the highest similarity score and best match
       const maxSimilarity = Math.max(...batchResults.map(r => r.similarity));
+      const bestMatch = batchResults.find(r => r.similarity === maxSimilarity);
+      const matchedSentence = bestMatch ? limitedTarget[bestMatch.targetIndex] : null;
       
       // If no sentence in target is similar enough, mark as unmatched
       if (maxSimilarity < threshold) {
         unmatched.push(sourceSent);
-        console.log(`    ✗ Unmatched (max similarity: ${(maxSimilarity * 100).toFixed(1)}%)`);
+        console.log(`    ✗ DISCREPANCY: ${(maxSimilarity * 100).toFixed(1)}% similarity (threshold: ${(threshold * 100).toFixed(0)}%)`);
+        if (matchedSentence) {
+          console.log(`    Closest match: "${matchedSentence.substring(0, 80)}..."`);
+        }
       } else {
-        console.log(`    ✓ Matched (max similarity: ${(maxSimilarity * 100).toFixed(1)}%)`);
+        console.log(`    ✓ Matched: ${(maxSimilarity * 100).toFixed(1)}% similarity`);
+        if (matchedSentence) {
+          console.log(`    Target: "${matchedSentence.substring(0, 80)}..."`);
+        }
       }
       
       // Send progress update if callback provided
@@ -97,12 +110,18 @@ async function findUnmatchedSentences(sourceSentences, targetSentences, threshol
         onProgress({
           label,
           current: i + 1,
-          total: sourceSentences.length,
-          percent: Math.round(((i + 1) / sourceSentences.length) * 100),
+          total: limitedSource.length,
+          percent: Math.round(((i + 1) / limitedSource.length) * 100),
           matched: maxSimilarity >= threshold,
           similarity: maxSimilarity,
-          message: `Analyzing ${label} sentence ${i + 1}/${sourceSentences.length} (${(maxSimilarity * 100).toFixed(1)}% similarity)`
+          message: `Analyzing ${label} sentence ${i + 1}/${limitedSource.length} (${(maxSimilarity * 100).toFixed(1)}% similarity)`
         });
+      }
+      
+      // Early stopping: if we found enough discrepancies (5+), stop processing
+      if (unmatched.length >= 5) {
+        console.log(`  ⚡ Early stopping: Found ${unmatched.length} discrepancies, stopping further comparison`);
+        break;
       }
     }
     
@@ -111,11 +130,11 @@ async function findUnmatchedSentences(sourceSentences, targetSentences, threshol
     // Fallback to string similarity if embeddings fail
     console.warn(`  ⚠ Embedding comparison failed for ${label}, using string similarity:`, error.message);
     
-    for (let i = 0; i < sourceSentences.length; i++) {
-      const sourceSent = sourceSentences[i];
+    for (let i = 0; i < limitedSource.length; i++) {
+      const sourceSent = limitedSource[i];
       let maxSimilarity = 0;
       
-      for (const targetSent of targetSentences) {
+      for (const targetSent of limitedTarget) {
         const similarity = sentenceSimilarity(sourceSent, targetSent);
         if (similarity > maxSimilarity) {
           maxSimilarity = similarity;
@@ -132,12 +151,18 @@ async function findUnmatchedSentences(sourceSentences, targetSentences, threshol
         onProgress({
           label,
           current: i + 1,
-          total: sourceSentences.length,
-          percent: Math.round(((i + 1) / sourceSentences.length) * 100),
+          total: limitedSource.length,
+          percent: Math.round(((i + 1) / limitedSource.length) * 100),
           matched: maxSimilarity >= 0.7,
           similarity: maxSimilarity,
-          message: `Analyzing ${label} sentence ${i + 1}/${sourceSentences.length} (fallback: ${(maxSimilarity * 100).toFixed(1)}% similarity)`
+          message: `Analyzing ${label} sentence ${i + 1}/${limitedSource.length} (fallback: ${(maxSimilarity * 100).toFixed(1)}% similarity)`
         });
+      }
+      
+      // Early stopping in fallback too
+      if (unmatched.length >= 5) {
+        console.log(`  ⚡ Early stopping: Found ${unmatched.length} discrepancies, stopping further comparison`);
+        break;
       }
     }
   }
@@ -193,11 +218,24 @@ export async function compareArticles(wikiArticle, grokArticle, onProgress = nul
   
   console.log(`→ Split: ${wikiSentences.length} Wiki sentences, ${grokSentences.length} Grok sentences`);
   
+  console.log(`\n→ Analyzing discrepancies between ${grokSentences.length} Grok sentences and ${wikiSentences.length} Wiki sentences...`);
+  console.log('Sample Grok sentence:', grokSentences[0]?.substring(0, 100));
+  console.log('Sample Wiki sentence:', wikiSentences[0]?.substring(0, 100));
+  
   // Find sentences added in Grokipedia (not in Wikipedia) using embeddings
-  const addedInGrok = await findUnmatchedSentences(grokSentences, wikiSentences, 0.65, 'added', onProgress);
+  // Lower threshold to 0.35 - sentences need to be VERY different to be flagged
+  const addedInGrok = await findUnmatchedSentences(grokSentences, wikiSentences, 0.35, 'added', onProgress);
   
   // Find sentences missing in Grokipedia (present in Wikipedia) using embeddings
-  const missingInGrok = await findUnmatchedSentences(wikiSentences, grokSentences, 0.65, 'missing', onProgress);
+  const missingInGrok = await findUnmatchedSentences(wikiSentences, grokSentences, 0.35, 'missing', onProgress);
+  
+  console.log(`✓ Found ${addedInGrok.length} added and ${missingInGrok.length} missing sentences`);
+  if (addedInGrok.length > 0) {
+    console.log('Example added:', addedInGrok[0]?.substring(0, 150));
+  }
+  if (missingInGrok.length > 0) {
+    console.log('Example missing:', missingInGrok[0]?.substring(0, 150));
+  }
   
   return {
     globalSimilarity: Math.round(globalSimilarity * 100) / 100, // Round to 2 decimals

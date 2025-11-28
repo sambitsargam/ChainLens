@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { initializeDKG } from './config/dkgClient.js';
+import { isDKGAvailable } from './config/dkgClient.js';
 import { validateLLMConfig } from './config/llmConfig.js';
 import { fetchWikipediaFullArticle } from './sources/wikipedia.js';
 import { fetchGrokipediaArticle } from './sources/grokipedia.js';
@@ -34,31 +34,31 @@ const TOPICS = [
     id: 'ai',
     name: 'Artificial Intelligence',
     wikiTitle: 'Artificial_intelligence',
-    grokSlug: 'artificial-intelligence',
+    grokSlug: 'Artificial_intelligence',
   },
   {
     id: 'blockchain',
     name: 'Blockchain',
     wikiTitle: 'Blockchain',
-    grokSlug: 'blockchain',
+    grokSlug: 'Blockchain',
   },
   {
     id: 'climate',
     name: 'Climate Change',
     wikiTitle: 'Climate_change',
-    grokSlug: 'climate-change',
+    grokSlug: 'Climate_change',
   },
   {
     id: 'quantum',
     name: 'Quantum Computing',
     wikiTitle: 'Quantum_computing',
-    grokSlug: 'quantum-computing',
+    grokSlug: 'Quantum_computing',
   },
   {
-    id: 'covid',
-    name: 'COVID-19',
-    wikiTitle: 'COVID-19',
-    grokSlug: 'covid-19',
+    id: 'crypto',
+    name: 'Cryptocurrency',
+    wikiTitle: 'Cryptocurrency',
+    grokSlug: 'Cryptocurrency',
   },
 ];
 
@@ -480,12 +480,19 @@ async function startServer() {
   try {
     console.log('\n🚀 Starting Grokipedia Truth Alignment Backend...\n');
     
-    // Initialize DKG client
-    console.log('Initializing OriginTrail DKG client...');
-    initializeDKG();
+    // Check DKG availability (non-blocking)
+    console.log('Checking OriginTrail DKG availability...');
+    const dkgReady = await isDKGAvailable();
+    if (dkgReady) {
+      console.log('✓ DKG node available - Knowledge Assets will be published to DKG');
+    } else {
+      console.log('⚠ DKG node not available - will use demo UALs instead');
+      console.log('  To enable DKG publishing, start your DKG Edge Node:');
+      console.log('  See: https://docs.origintrail.io/getting-started/dkg-node-services');
+    }
     
     // Validate LLM configuration
-    console.log('Validating LLM configuration...');
+    console.log('\nValidating LLM configuration...');
     validateLLMConfig();
     
     // Start Express server

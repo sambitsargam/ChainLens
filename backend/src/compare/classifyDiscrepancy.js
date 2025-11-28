@@ -51,11 +51,14 @@ function formatModelVotes(ensembleResult) {
 export async function classifyDiscrepancies(params) {
   const { topic, wikiArticle, grokArticle, comparisonResult } = params;
   
+  console.log(`→ Classifying discrepancies: ${comparisonResult.addedInGrok.length} added, ${comparisonResult.missingInGrok.length} missing`);
+  
   const discrepancies = [];
   const wikipediaContext = wikiArticle.text.substring(0, 500); // First 500 chars for context
   
   // Process sentences added in Grokipedia
   const addedLimit = Math.min(comparisonResult.addedInGrok.length, 5); // Limit to 5 for API costs
+  console.log(`  → Will classify ${addedLimit} added sentences`);
   
   for (let i = 0; i < addedLimit; i++) {
     const grokSentence = comparisonResult.addedInGrok[i];
@@ -117,6 +120,8 @@ export async function classifyDiscrepancies(params) {
     }
   }
   */
+  
+  console.log(`✓ Classified ${discrepancies.length} discrepancies`);
   
   return {
     topic,

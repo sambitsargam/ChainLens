@@ -95,7 +95,8 @@ export async function classifyDiscrepancyWithGemini(input) {
         ],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 1000, // Increased for Gemini 2.5 thinking tokens
+          maxOutputTokens: 2000, // Increased for Gemini 2.5 thinking tokens
+          responseMimeType: 'application/json', // Request JSON directly
         },
       },
       {
@@ -128,26 +129,38 @@ export async function classifyDiscrepancyWithGemini(input) {
       
       // If using Gemini 2.5 with thinking mode, parts might be missing
       if (candidate.finishReason === 'MAX_TOKENS') {
-        throw new Error('Gemini API response truncated. Increase maxOutputTokens (current: 1000) or try a different model like gemini-2.0-flash-exp');
+        throw new Error('Gemini API response truncated. Increase maxOutputTokens (current: 2000) or try a different model');
       }
       
       throw new Error('Gemini API candidate has no content parts');
     }
     
-    const content = candidate.content.parts[0].text.trim();
+    let content = candidate.content.parts[0].text.trim();
     
-    // Parse JSON response
+    // Parse JSON response with multiple fallback strategies
     let result;
     try {
       result = JSON.parse(content);
     } catch (parseError) {
-      // Try to extract JSON from markdown code blocks
+      // Strategy 1: Try to extract JSON from markdown code blocks
       const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
                        content.match(/```\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
-        result = JSON.parse(jsonMatch[1]);
+        try {
+          result = JSON.parse(jsonMatch[1].trim());
+        } catch (e) {
+          console.error('Failed to parse extracted JSON from markdown:', jsonMatch[1]);
+          throw new Error(`Unexpected token in Gemini response. Raw: ${content.substring(0, 100)}...`);
+        }
       } else {
-        throw parseError;
+        // Strategy 2: Remove markdown artifacts and try again
+        const cleaned = content.replace(/```json|```/g, '').trim();
+        try {
+          result = JSON.parse(cleaned);
+        } catch (e) {
+          console.error('Failed to parse cleaned JSON:', cleaned.substring(0, 200));
+          throw new Error(`Unexpected token '${content.charAt(0)}', "${content.substring(0, 20)}..." is not valid JSON`);
+        }
       }
     }
     

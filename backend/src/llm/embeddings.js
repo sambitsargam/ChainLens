@@ -19,10 +19,13 @@ export async function getOpenAIEmbedding(text) {
   }
 
   try {
+    // Truncate text if too long (OpenAI has 8191 token limit for embeddings)
+    const truncatedText = text.length > 8000 ? text.substring(0, 8000) : text;
+    
     const response = await axios.post(
       llmConfig.openai.embeddingEndpoint,
       {
-        input: text,
+        input: truncatedText,
         model: llmConfig.openai.embeddingModel,
       },
       {
@@ -36,7 +39,11 @@ export async function getOpenAIEmbedding(text) {
 
     return response.data.data[0].embedding;
   } catch (error) {
-    console.error('OpenAI embedding error:', error.message);
+    if (error.response?.data) {
+      console.error('OpenAI embedding error:', error.response.data);
+    } else {
+      console.error('OpenAI embedding error:', error.message);
+    }
     throw new Error(`OpenAI embedding failed: ${error.message}`);
   }
 }
@@ -175,14 +182,18 @@ export async function batchCompareWithEmbeddings(sourceSentence, targetSentences
   const results = [];
   
   try {
-    // Get source embedding once
+    // Get source embedding once and determine which provider worked
     const sourceResult = await getEmbeddingWithFallback(sourceSentence);
+    const provider = sourceResult.provider;
     
-    // Compare against each target sentence
+    // Use the SAME provider for all target sentences to ensure matching dimensions
+    const getEmbeddingFunc = provider === 'openai' ? getOpenAIEmbedding : getGeminiEmbedding;
+    
+    // Compare against each target sentence using the same provider
     for (let i = 0; i < targetSentences.length; i++) {
       try {
-        const targetResult = await getEmbeddingWithFallback(targetSentences[i]);
-        const similarity = cosineSimilarity(sourceResult.embedding, targetResult.embedding);
+        const targetEmbedding = await getEmbeddingFunc(targetSentences[i]);
+        const similarity = cosineSimilarity(sourceResult.embedding, targetEmbedding);
         
         results.push({
           similarity: Math.max(0, Math.min(1, (similarity + 1) / 2)),
