@@ -1,30 +1,54 @@
 /**
- * Wikipedia API Service
- * Fetches articles directly from Wikipedia REST API using CORS proxy
+ * Wikipedia Service
+ * Fetches articles from Wikipedia using web scraping via CORS proxy
  */
 
-const WIKIPEDIA_API_BASE = 'https://en.wikipedia.org/api/rest_v1';
+const WIKIPEDIA_BASE = 'https://en.wikipedia.org/wiki';
 
 export async function fetchWikipediaArticle(title) {
   try {
-    const url = `${WIKIPEDIA_API_BASE}/page/summary/${encodeURIComponent(title)}`;
+    const targetUrl = `${WIKIPEDIA_BASE}/${encodeURIComponent(title)}`;
+    // Use allOrigins CORS proxy - more reliable
+    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
     
-    console.log(`Fetching from Wikipedia: ${url}`);
+    console.log(`Scraping Wikipedia page via allOrigins: ${targetUrl}`);
     
-    const response = await fetch(url, {
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+    const response = await fetch(url);
     
     if (!response.ok) {
-      throw new Error(`Wikipedia API returned ${response.status}`);
+      throw new Error(`Wikipedia returned ${response.status}`);
     }
     
-    const data = await response.json();
+    const html = await response.text();
     
-    // Use summary endpoint which has better CORS support
-    let text = data.extract || '';
+    // Extract main content from Wikipedia HTML
+    // Wikipedia content is in <div id="mw-content-text">
+    const contentMatch = html.match(/<div[^>]*id="mw-content-text"[^>]*>([\s\S]*?)<div[^>]*id="catlinks"/i);
+    let content = contentMatch ? contentMatch[1] : html;
+    
+    // Remove references, tables, infoboxes, and navigation elements
+    content = content
+      .replace(/<table[^>]*class="[^"]*infobox[^"]*"[^>]*>[\s\S]*?<\/table>/gi, '')
+      .replace(/<div[^>]*class="[^"]*navbox[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '')
+      .replace(/<sup[^>]*class="[^"]*reference[^"]*"[^>]*>[\s\S]*?<\/sup>/gi, '')
+      .replace(/<span[^>]*class="[^"]*mw-editsection[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '')
+      .replace(/<table[\s\S]*?<\/table>/gi, '');
+    
+    // Extract text from paragraphs
+    const paragraphMatches = content.match(/<p>[\s\S]*?<\/p>/gi) || [];
+    let text = '';
+    
+    for (const para of paragraphMatches.slice(0, 10)) {
+      const cleanPara = para
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\[[^\]]+\]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      if (cleanPara.length > 50) {
+        text += cleanPara + ' ';
+      }
+    }
     
     // Normalize whitespace
     text = text.replace(/\s+/g, ' ').trim();
@@ -39,12 +63,16 @@ export async function fetchWikipediaArticle(title) {
     
     console.log(`✓ Wikipedia: ${sentences.length} sentences (${limitedText.length} chars)`);
     
+    // Extract title from HTML
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+    const pageTitle = titleMatch ? titleMatch[1].replace(/\s*-\s*Wikipedia.*$/, '').trim() : title;
+    
     return {
       source: 'Wikipedia',
-      title: data.title || title,
+      title: pageTitle,
       text: limitedText,
       sentenceCount: sentences.length,
-      url: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
+      url: targetUrl,
     };
   } catch (error) {
     console.error(`Wikipedia fetch failed:`, error);

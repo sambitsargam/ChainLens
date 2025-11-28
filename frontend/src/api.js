@@ -20,19 +20,19 @@ const TOPICS = [
     id: 3,
     name: 'Artificial Intelligence',
     wikiTitle: 'Artificial_intelligence',
-    grokSlug: 'Artificial_Intelligence',
+    grokSlug: 'Artificial_intelligence',
   },
   {
     id: 4,
     name: 'Climate Change',
     wikiTitle: 'Climate_change',
-    grokSlug: 'Climate_Change',
+    grokSlug: 'Climate_change',
   },
   {
     id: 5,
     name: 'Quantum Computing',
     wikiTitle: 'Quantum_computing',
-    grokSlug: 'Quantum_Computing',
+    grokSlug: 'Quantum_computing',
   },
 ];
 
