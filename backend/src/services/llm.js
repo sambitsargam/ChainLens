@@ -88,7 +88,7 @@ Context: "${context}"
 
 Respond with JSON: {"label": "...", "confidence": 0.0-1.0, "explanation": "..."}`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
@@ -101,15 +101,16 @@ Respond with JSON: {"label": "...", "confidence": 0.0-1.0, "explanation": "..."}
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 500,
+            maxOutputTokens: 200,
             responseMimeType: 'application/json',
           },
         }),
       });
 
       if (response.status === 429) {
-        console.warn(`⏳ Gemini rate limited (${attempt + 1}/${retries}), retrying...`);
-        await sleep(Math.pow(2, attempt) * 2000);
+        const waitTime = Math.pow(2, attempt + 1) * 3000;
+        console.warn(`⏳ Gemini rate limited (${attempt + 1}/${retries}), waiting ${waitTime}ms...`);
+        await sleep(waitTime);
         continue;
       }
 
@@ -146,14 +147,14 @@ Respond with JSON only: {"label": "...", "confidence": 0.0-1.0, "explanation": "
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${GROK_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'grok-beta',
+          model: 'groq/compound',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
           max_tokens: 500,
@@ -161,7 +162,7 @@ Respond with JSON only: {"label": "...", "confidence": 0.0-1.0, "explanation": "
       });
 
       if (response.status === 429) {
-        console.warn(`⏳ Grok rate limited (${attempt + 1}/${retries}), retrying...`);
+        console.warn(`⏳ Groq rate limited (${attempt + 1}/${retries}), retrying...`);
         await sleep(Math.pow(2, attempt) * 2000);
         continue;
       }
@@ -175,7 +176,7 @@ Respond with JSON only: {"label": "...", "confidence": 0.0-1.0, "explanation": "
       const content = data.choices[0].message.content.trim();
       return JSON.parse(content);
     } catch (error) {
-      console.error(`❌ Grok attempt ${attempt + 1} failed:`, error.message);
+      console.error(`❌ Groq attempt ${attempt + 1} failed:`, error.message);
       if (attempt === retries - 1) throw error;
       await sleep(Math.pow(2, attempt) * 1000);
     }

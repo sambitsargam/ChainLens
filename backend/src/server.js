@@ -13,6 +13,8 @@ import dkgRoutes from './routes/dkg.js';
 import publishnoteRoutes from './routes/publishnote.js';
 import scraperRoutes from './routes/scraper.js';
 import premiumRoutes from './routes/premium.js';
+import llmDebugRoutes from './routes/llm-debug.js';
+import classifyRoutes from './routes/classify.js';
 
 const app = express();
 
@@ -58,6 +60,8 @@ app.use('/api/', limiter);
 app.use('/api/dkg', dkgRoutes);
 app.use('/api/publishnote', publishnoteRoutes);
 app.use('/api/scraper', scraperRoutes);
+app.use('/api/llm-debug', llmDebugRoutes);
+app.use('/api/classify', classifyRoutes);
 app.use('/api', premiumRoutes);
 
 // Root endpoint

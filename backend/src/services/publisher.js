@@ -248,12 +248,14 @@ export async function checkDKGHealth() {
     // Mock health check
     return {
       status: 'operational',
-      endpoint: DKG_BASE_URL,
+      endpoint: DKG_LOCAL_URL,
+      available_endpoints: DKG_ENDPOINTS,
     };
   } catch (error) {
     return {
       status: 'error',
-      endpoint: DKG_BASE_URL,
+      endpoint: DKG_LOCAL_URL,
+      error: error.message,
     };
   }
 }

@@ -158,4 +158,4 @@ const X402_CONFIG = {
   },
 };
 
-module.exports = X402_CONFIG;
+export default X402_CONFIG;

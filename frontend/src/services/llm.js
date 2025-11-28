@@ -94,7 +94,8 @@ Wikipedia: "${wikiContext}"
 
 Respond with JSON: {"label": "...", "explanation": "..."}`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`;
+  // Use the correct Gemini API endpoint
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
@@ -104,11 +105,13 @@ Respond with JSON: {"label": "...", "explanation": "..."}`;
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ 
+            parts: [{ text: prompt }],
+            role: 'user'
+          }],
           generationConfig: {
             temperature: 0.3,
             maxOutputTokens: 500,
-            responseMimeType: 'application/json',
           },
         }),
       });
@@ -121,25 +124,32 @@ Respond with JSON: {"label": "...", "explanation": "..."}`;
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Gemini HTTP ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
+        const errorData = await response.text();
+        throw new Error(`Gemini HTTP ${response.status}: ${errorData}`);
       }
 
       const data = await response.json();
       
       // Validate response structure
       if (!data.candidates || !Array.isArray(data.candidates) || data.candidates.length === 0) {
-        throw new Error('Invalid Gemini response structure: no candidates');
+        throw new Error('Invalid Gemini response: no candidates');
       }
       
       const candidate = data.candidates[0];
+      if (candidate.finishReason !== 'STOP' && candidate.finishReason !== 'END_TURN') {
+        throw new Error(`Gemini blocked: ${candidate.finishReason}`);
+      }
+      
       if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-        throw new Error('Invalid Gemini response structure: no content');
+        throw new Error('Invalid Gemini response: no content');
       }
       
       const content = candidate.content.parts[0].text.trim();
-      return JSON.parse(content);
+      // Remove markdown code blocks if present
+      const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      return JSON.parse(cleanedContent);
     } catch (error) {
+      console.error(`🔴 Gemini attempt ${attempt + 1}/${retries} failed:`, error.message);
       if (attempt === retries - 1) throw error;
       await sleep(Math.pow(2, attempt) * 1000);
     }
@@ -147,7 +157,7 @@ Respond with JSON: {"label": "...", "explanation": "..."}`;
 }
 
 /**
- * Classify with Grok (xAI) with retry logic
+ * Classify with Groq with retry logic
  */
 export async function classifyWithGrok(grokSentence, wikiContext, retries = 2) {
   if (!GROK_API_KEY) {
@@ -161,7 +171,7 @@ Wikipedia: "${wikiContext}"
 
 Respond with JSON only: {"label": "...", "explanation": "..."}`;
 
-  const url = 'https://api.x.ai/v1/chat/completions';
+  const url = 'https://api.groq.com/openai/v1/chat/completions';
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
@@ -172,7 +182,7 @@ Respond with JSON only: {"label": "...", "explanation": "..."}`;
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'grok-beta',
+          model: 'groq/compound',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
           max_tokens: 500,
@@ -181,25 +191,28 @@ Respond with JSON only: {"label": "...", "explanation": "..."}`;
 
       // Handle rate limiting
       if (response.status === 429) {
-        console.warn(`🔄 Grok rate limited (attempt ${attempt + 1}/${retries}), retrying...`);
+        console.warn(`🔄 Groq rate limited (attempt ${attempt + 1}/${retries}), retrying...`);
         await sleep(Math.pow(2, attempt) * 2000);
         continue;
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Grok HTTP ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
+        const errorData = await response.text();
+        throw new Error(`Groq HTTP ${response.status}: ${errorData}`);
       }
 
       const data = await response.json();
       
       if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
-        throw new Error('Invalid Grok response structure: no choices');
+        throw new Error('Invalid Groq response: no choices');
       }
       
       const content = data.choices[0].message.content.trim();
-      return JSON.parse(content);
+      // Remove markdown code blocks if present
+      const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      return JSON.parse(cleanedContent);
     } catch (error) {
+      console.error(`🔴 Groq attempt ${attempt + 1}/${retries} failed:`, error.message);
       if (attempt === retries - 1) throw error;
       await sleep(Math.pow(2, attempt) * 1000);
     }

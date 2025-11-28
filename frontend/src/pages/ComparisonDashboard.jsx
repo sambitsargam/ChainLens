@@ -3,7 +3,6 @@ import { getTopics, searchNotes } from '../api';
 import { fetchWikipediaArticle } from '../services/wikipedia';
 import { fetchGrokipediaArticle } from '../services/grokipedia';
 import { compareArticles } from '../services/comparison';
-import { classifyDiscrepancies } from '../services/llm';
 import { publishToDKG, saveCommunityNoteToHistory } from '../services/dkg';
 import CustomTopicSelector from '../components/CustomTopicSelector';
 import AlignmentScoreBadge from '../components/AlignmentScoreBadge';
@@ -96,8 +95,26 @@ function ComparisonDashboard() {
       
       // Step 4: Classify discrepancies
       if (comparison.addedInGrok.length > 0) {
-        setProgressSteps(prev => [...prev, { step: 4, status: 'progress', message: 'Classifying discrepancies with LLMs...' }]);
-        const classified = await classifyDiscrepancies(comparison.addedInGrok, wikiArticle.text);
+        setProgressSteps(prev => [...prev, { step: 4, status: 'progress', message: 'Classifying discrepancies with LLMs (3-model consensus)...' }]);
+        
+        // Call backend classification endpoint for 3-model consensus
+        const response = await fetch('http://localhost:3001/api/classify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            discrepancies: comparison.addedInGrok,
+            context: wikiArticle.text
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Classification failed: ${response.statusText}`);
+        }
+        
+        const classificationResult = await response.json();
+        const classified = classificationResult.classified || [];
         
         // Prepare analysis data
         const analysisData = {
@@ -153,6 +170,7 @@ function ComparisonDashboard() {
         saveCommunityNoteToHistory(dkgResult, selectedTopic.name);
         
         setResult(finalResult);
+        setLoading(false);
       } else {
         // No discrepancies found - still publish to DKG
         setProgressSteps(prev => [...prev, { step: 4, status: 'progress', message: 'No discrepancies found - preparing Community Note...' }]);
@@ -207,9 +225,8 @@ function ComparisonDashboard() {
         saveCommunityNoteToHistory(dkgResult, selectedTopic.name);
         
         setResult(finalResult);
+        setLoading(false);
       }
-      
-      setLoading(false);
       
     } catch (err) {
       console.error('Error running comparison:', err);
