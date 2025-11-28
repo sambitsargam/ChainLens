@@ -95,7 +95,7 @@ export async function classifyDiscrepancyWithGemini(input) {
         ],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 200,
+          maxOutputTokens: 1000, // Increased for Gemini 2.5 thinking tokens
         },
       },
       {
@@ -106,7 +106,35 @@ export async function classifyDiscrepancyWithGemini(input) {
       }
     );
     
-    const content = response.data.candidates[0].content.parts[0].text.trim();
+    // Validate response structure
+    if (!response.data) {
+      throw new Error('Gemini API returned empty response');
+    }
+    
+    if (!response.data.candidates || response.data.candidates.length === 0) {
+      console.error('Gemini response:', JSON.stringify(response.data, null, 2));
+      throw new Error('Gemini API returned no candidates. Response may be blocked or filtered.');
+    }
+    
+    const candidate = response.data.candidates[0];
+    
+    // Check finish reason - if MAX_TOKENS, the response was cut off
+    if (candidate.finishReason === 'MAX_TOKENS') {
+      console.warn('⚠ Gemini response was truncated due to MAX_TOKENS. Increase maxOutputTokens in config.');
+    }
+    
+    if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+      console.error('Gemini candidate:', JSON.stringify(candidate, null, 2));
+      
+      // If using Gemini 2.5 with thinking mode, parts might be missing
+      if (candidate.finishReason === 'MAX_TOKENS') {
+        throw new Error('Gemini API response truncated. Increase maxOutputTokens (current: 1000) or try a different model like gemini-2.0-flash-exp');
+      }
+      
+      throw new Error('Gemini API candidate has no content parts');
+    }
+    
+    const content = candidate.content.parts[0].text.trim();
     
     // Parse JSON response
     let result;
@@ -137,17 +165,19 @@ export async function classifyDiscrepancyWithGemini(input) {
     console.error('Gemini classification error:', error.message);
     console.error('Gemini API URL:', `https://generativelanguage.googleapis.com/v1beta/models/${llmConfig.gemini.model}:generateContent`);
     console.error('Gemini model:', llmConfig.gemini.model);
+    
     if (error.response) {
       console.error('Response status:', error.response.status);
-      console.error('Response data:', JSON.stringify(error.response.data).substring(0, 500));
+      console.error('Response data:', JSON.stringify(error.response.data, null, 2));
     }
     
     if (error.response?.status === 400) {
-      throw new Error('Gemini API bad request - check your configuration');
+      const errorMsg = error.response.data?.error?.message || 'Bad request';
+      throw new Error(`Gemini API bad request: ${errorMsg}`);
     }
     
     if (error.response?.status === 404) {
-      throw new Error(`Gemini model not found: ${llmConfig.gemini.model}. Try: gemini-1.5-flash, gemini-1.5-pro, gemini-pro`);
+      throw new Error(`Gemini model not found: ${llmConfig.gemini.model}. Try: gemini-2.0-flash-exp, gemini-1.5-flash, gemini-1.5-pro`);
     }
     
     if (error.response?.status === 429) {

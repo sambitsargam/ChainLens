@@ -195,7 +195,7 @@ function ComparisonDashboard() {
                   </div>
                 )}
                 
-                {/* Loading Indicator with Progress Steps */}
+                {/* Loading Indicator with Real-Time Progress */}
                 {loading && (
                   <div className="card bg-blue-50 border-2 border-blue-300">
                     <div className="py-8">
@@ -205,66 +205,114 @@ function ComparisonDashboard() {
                           Processing Analysis
                         </h3>
                         <p className="text-blue-700 mb-4">
-                          This may take 30-60 seconds...
+                          Real-time updates • {progressSteps.length} events received
                         </p>
                       </div>
                       
-                      {/* Progress Steps */}
-                      <div className="space-y-3 max-w-2xl mx-auto">
-                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
-                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">1</div>
-                          <div className="flex-1">
-                            <div className="font-semibold text-gray-900">Fetching Wikipedia Article</div>
-                            <div className="text-xs text-gray-600">Using Wikipedia REST API</div>
+                      {/* Progress Steps with Real-Time Updates */}
+                      <div className="space-y-3 max-w-3xl mx-auto">
+                        {progressSteps.length === 0 ? (
+                          <div className="text-center text-gray-600 py-4">
+                            <div className="animate-spin text-3xl mb-2">⟳</div>
+                            <div>Initializing...</div>
                           </div>
-                          <div className="animate-spin text-blue-500">⟳</div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
-                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">2</div>
-                          <div className="flex-1">
-                            <div className="font-semibold text-gray-900">Fetching Grokipedia Article</div>
-                            <div className="text-xs text-gray-600">Scraping content from Grokipedia</div>
-                          </div>
-                          <div className="animate-spin text-blue-500">⟳</div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
-                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">3</div>
-                          <div className="flex-1">
-                            <div className="font-semibold text-gray-900">Semantic Comparison with Embeddings</div>
-                            <div className="text-xs text-gray-600">AI-powered similarity analysis using OpenAI/Gemini</div>
-                          </div>
-                          <div className="animate-spin text-blue-500">⟳</div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
-                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">4</div>
-                          <div className="flex-1">
-                            <div className="font-semibold text-gray-900">LLM Ensemble Classification</div>
-                            <div className="text-xs text-gray-600">OpenAI + Gemini + Groq analyzing discrepancies</div>
-                          </div>
-                          <div className="animate-spin text-blue-500">⟳</div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
-                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">5</div>
-                          <div className="flex-1">
-                            <div className="font-semibold text-gray-900">Building Community Note</div>
-                            <div className="text-xs text-gray-600">Generating JSON-LD structure</div>
-                          </div>
-                          <div className="animate-spin text-blue-500">⟳</div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
-                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">6</div>
-                          <div className="flex-1">
-                            <div className="font-semibold text-gray-900">Publishing to DKG</div>
-                            <div className="text-xs text-gray-600">Creating Knowledge Asset on OriginTrail</div>
-                          </div>
-                          <div className="animate-spin text-blue-500">⟳</div>
-                        </div>
+                        ) : (
+                          progressSteps.slice(-6).map((progress, idx) => {
+                            const isComplete = progress.status?.includes('complete');
+                            const isError = progress.status?.includes('error');
+                            const isProgress = progress.status?.includes('progress');
+                            
+                            return (
+                              <div 
+                                key={idx}
+                                className={`flex items-start space-x-3 p-3 rounded-lg transition-all ${
+                                  isComplete ? 'bg-green-50 border-2 border-green-300' :
+                                  isError ? 'bg-red-50 border-2 border-red-300' :
+                                  'bg-white border border-blue-200'
+                                }`}
+                              >
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${
+                                  isComplete ? 'bg-green-500 text-white' :
+                                  isError ? 'bg-red-500 text-white' :
+                                  'bg-blue-500 text-white'
+                                }`}>
+                                  {isComplete ? '✓' : isError ? '✗' : progress.step || idx + 1}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-semibold text-gray-900 flex items-center justify-between">
+                                    <span>{progress.message || progress.status}</span>
+                                    {isProgress && progress.percent && (
+                                      <span className="text-xs bg-blue-100 px-2 py-1 rounded ml-2">
+                                        {progress.percent}%
+                                      </span>
+                                    )}
+                                  </div>
+                                  {progress.data && (
+                                    <div className="text-xs text-gray-600 mt-1 space-y-1">
+                                      {progress.data.title && (
+                                        <div>📄 {progress.data.title}</div>
+                                      )}
+                                      {progress.data.charCount && (
+                                        <div>📊 {progress.data.charCount.toLocaleString()} characters, {progress.data.wordCount?.toLocaleString()} words</div>
+                                      )}
+                                      {progress.data.globalSimilarity && (
+                                        <div>🎯 {(progress.data.globalSimilarity * 100).toFixed(1)}% similarity</div>
+                                      )}
+                                      {progress.data.provider && (
+                                        <div>🧠 Using {progress.data.provider} embeddings</div>
+                                      )}
+                                      {progress.label && progress.current && (
+                                        <div>
+                                          Sentence {progress.current}/{progress.total} 
+                                          {progress.similarity && ` • ${(progress.similarity * 100).toFixed(1)}% match`}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                {!isComplete && !isError && (
+                                  <div className="animate-spin text-blue-500 flex-shrink-0">⟳</div>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
+                      
+                      {/* Partial Data Preview */}
+                      {Object.keys(partialData).length > 0 && (
+                        <div className="mt-6 max-w-3xl mx-auto">
+                          <div className="bg-white rounded-lg p-4 border border-blue-200">
+                            <div className="text-sm font-semibold text-gray-700 mb-2">📊 Live Data Preview</div>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              {partialData.title && (
+                                <div>
+                                  <span className="text-gray-600">Last Article:</span>
+                                  <div className="font-semibold">{partialData.title}</div>
+                                </div>
+                              )}
+                              {partialData.globalSimilarity && (
+                                <div>
+                                  <span className="text-gray-600">Similarity:</span>
+                                  <div className="font-semibold">{(partialData.globalSimilarity * 100).toFixed(1)}%</div>
+                                </div>
+                              )}
+                              {partialData.alignmentScore && (
+                                <div>
+                                  <span className="text-gray-600">Alignment:</span>
+                                  <div className="font-semibold">{(partialData.alignmentScore * 100).toFixed(1)}%</div>
+                                </div>
+                              )}
+                              {partialData.discrepancyCount !== undefined && (
+                                <div>
+                                  <span className="text-gray-600">Discrepancies:</span>
+                                  <div className="font-semibold">{partialData.discrepancyCount}</div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
