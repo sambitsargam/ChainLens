@@ -4,6 +4,7 @@ import { fetchWikipediaArticle } from '../services/wikipedia';
 import { fetchGrokipediaArticle } from '../services/grokipedia';
 import { compareArticles } from '../services/comparison';
 import { classifyDiscrepancies } from '../services/llm';
+import { publishToDKG, saveCommunityNoteToHistory } from '../services/dkg';
 import TopicList from '../components/TopicList';
 import AlignmentScoreBadge from '../components/AlignmentScoreBadge';
 import DiscrepancyList from '../components/DiscrepancyList';
@@ -86,25 +87,22 @@ function ComparisonDashboard() {
         setProgressSteps(prev => [...prev, { step: 4, status: 'progress', message: 'Classifying discrepancies with LLMs...' }]);
         const classified = await classifyDiscrepancies(comparison.addedInGrok, wikiArticle.text);
         
-        // Step 5: Complete
-        setProgressSteps(prev => [...prev, { step: 5, status: 'complete', message: 'Analysis complete!' }]);
-        
-        const finalResult = {
-          success: true,
+        // Prepare analysis data
+        const analysisData = {
           topic: selectedTopic.name,
-          ual: `demo:${selectedTopic.name.toLowerCase().replace(/\s+/g, '-')}:${Date.now()}`,
-          dkgPublished: false,
           wikiArticle: {
             title: wikiArticle.title,
             extract: wikiArticle.text.substring(0, 500),
             fullLength: wikiArticle.text.length,
             sentenceCount: wikiArticle.sentenceCount,
+            url: wikiArticle.url,
           },
           grokArticle: {
             title: grokArticle.title,
             extract: grokArticle.text.substring(0, 500),
             fullLength: grokArticle.text.length,
             sentenceCount: grokArticle.sentenceCount,
+            url: grokArticle.url,
           },
           analysis: {
             alignmentScore: comparison.globalSimilarity,
@@ -122,27 +120,46 @@ function ComparisonDashboard() {
           discrepancies: classified,
         };
         
-        setResult(finalResult);
-      } else {
-        // No discrepancies found
-        setProgressSteps(prev => [...prev, { step: 4, status: 'complete', message: 'No discrepancies found!' }]);
+        // Step 5: Publish to DKG
+        setProgressSteps(prev => [...prev, { step: 5, status: 'progress', message: 'Publishing Community Note to DKG...' }]);
+        const dkgResult = await publishToDKG(analysisData);
+        
+        // Step 6: Complete
+        setProgressSteps(prev => [...prev, { step: 6, status: 'complete', message: dkgResult.success ? 'Published to DKG!' : 'Analysis complete (DKG unavailable)' }]);
         
         const finalResult = {
+          ...analysisData,
           success: true,
+          ual: dkgResult.ual,
+          transactionHash: dkgResult.transactionHash,
+          explorerUrl: dkgResult.explorerUrl,
+          dkgPublished: dkgResult.success,
+          communityNote: dkgResult.communityNote,
+        };
+        
+        // Save to history
+        saveCommunityNoteToHistory(dkgResult, selectedTopic.name);
+        
+        setResult(finalResult);
+      } else {
+        // No discrepancies found - still publish to DKG
+        setProgressSteps(prev => [...prev, { step: 4, status: 'progress', message: 'No discrepancies found - preparing Community Note...' }]);
+        
+        const analysisData = {
           topic: selectedTopic.name,
-          ual: `demo:${selectedTopic.name.toLowerCase().replace(/\s+/g, '-')}:${Date.now()}`,
-          dkgPublished: false,
           wikiArticle: {
             title: wikiArticle.title,
             extract: wikiArticle.text.substring(0, 500),
             fullLength: wikiArticle.text.length,
             sentenceCount: wikiArticle.sentenceCount,
+            url: wikiArticle.url,
           },
           grokArticle: {
             title: grokArticle.title,
             extract: grokArticle.text.substring(0, 500),
             fullLength: grokArticle.text.length,
             sentenceCount: grokArticle.sentenceCount,
+            url: grokArticle.url,
           },
           analysis: {
             alignmentScore: comparison.globalSimilarity,
@@ -156,6 +173,26 @@ function ComparisonDashboard() {
           },
           discrepancies: [],
         };
+        
+        // Publish to DKG
+        setProgressSteps(prev => [...prev, { step: 5, status: 'progress', message: 'Publishing Community Note to DKG...' }]);
+        const dkgResult = await publishToDKG(analysisData);
+        
+        // Complete
+        setProgressSteps(prev => [...prev, { step: 6, status: 'complete', message: dkgResult.success ? 'Published to DKG!' : 'Analysis complete (DKG unavailable)' }]);
+        
+        const finalResult = {
+          ...analysisData,
+          success: true,
+          ual: dkgResult.ual,
+          transactionHash: dkgResult.transactionHash,
+          explorerUrl: dkgResult.explorerUrl,
+          dkgPublished: dkgResult.success,
+          communityNote: dkgResult.communityNote,
+        };
+        
+        // Save to history
+        saveCommunityNoteToHistory(dkgResult, selectedTopic.name);
         
         setResult(finalResult);
       }

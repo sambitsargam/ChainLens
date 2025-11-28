@@ -1,23 +1,49 @@
 /**
  * Text Comparison Service
  * Compares Wikipedia and Grokipedia articles using embeddings
+ * Reference implementation: copy/dkg-web-main/lib/analysis-utils.ts
  */
 
 import { getOpenAIEmbedding, cosineSimilarity } from './embeddings.js';
 
+/**
+ * Split text into meaningful sentences
+ * Filters: 5+ words, 20-500 chars, factual statements (no questions/commands)
+ * Max 5 sentences returned
+ */
 export function splitIntoSentences(text) {
   if (!text || typeof text !== 'string') {
     return [];
   }
   
+  // Split by sentence markers and filter for meaningful claims
   const sentences = text
-    .split(/(?<=[.!?])\s+/)
+    .replace(/([.!?])\s+/g, '$1|SPLIT|')
+    .split('|SPLIT|')
     .map(s => s.trim())
-    .filter(s => s.length > 30);
+    .filter(s => {
+      const wordCount = s.split(/\s+/).length;
+      // Must be 5+ words, 20-500 chars, factual statements
+      return (
+        s.length >= 20 &&
+        s.length <= 500 &&
+        wordCount >= 5 &&
+        !s.toLowerCase().startsWith('what ') &&
+        !s.toLowerCase().startsWith('how ') &&
+        !s.toLowerCase().startsWith('why ') &&
+        !s.toLowerCase().startsWith('please ') &&
+        !s.endsWith('?')
+      );
+    })
+    .slice(0, 5); // Max 5 sentences
   
   return sentences;
 }
 
+/**
+ * Compare two articles using semantic similarity
+ * Returns discrepancies found between sources
+ */
 export async function compareArticles(wikiArticle, grokArticle, onProgress) {
   const wikiSentences = splitIntoSentences(wikiArticle.text);
   const grokSentences = splitIntoSentences(grokArticle.text);
@@ -26,7 +52,7 @@ export async function compareArticles(wikiArticle, grokArticle, onProgress) {
   
   // Compare for added sentences (in Grok but not Wiki)
   const addedInGrok = [];
-  const threshold = 0.85; // 85% similarity = match
+  const threshold = 0.70; // 70% similarity = match (more lenient for better discrepancy detection)
   
   for (let i = 0; i < grokSentences.length; i++) {
     const grokSent = grokSentences[i];

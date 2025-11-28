@@ -1,73 +1,84 @@
 /**
  * Grokipedia Service
- * Fetches articles from Grokipedia using web scraping via CORS proxy
+ * Fetches articles from Grokipedia via backend API (to avoid CORS)
+ * Backend uses multi-strategy HTML parsing matching reference implementation
  */
 
-const GROKIPEDIA_WEB_BASE = 'https://grokipedia.com/page';
+const BACKEND_URL = import.meta.env.VITE_DKG_BACKEND_URL || 'http://localhost:3001';
 
-async function scrapeGrokipediaPage(slug) {
-  const targetUrl = `${GROKIPEDIA_WEB_BASE}/${slug}`;
-  // Use allOrigins CORS proxy - more reliable
-  const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-  
-  console.log(`Scraping Grokipedia page via allOrigins: ${targetUrl}`);
-  
-  try {
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Grokipedia returned ${response.status}`);
-    }
-    
-    const html = await response.text();
-    
-    // Extract text content from HTML
-    // Remove script and style tags
-    let text = html
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    // Extract title from meta tags or h1
-    const titleMatch = html.match(/<title>([^<]+)<\/title>/i) || 
-                       html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
-    const title = titleMatch ? titleMatch[1].trim().replace(/\s*\|\s*Grokipedia$/, '') : slug;
-    
-    return { text, title, url };
-  } catch (error) {
-    console.error('Web scraping failed:', error);
-    throw error;
+/**
+ * Extract meaningful sentences from text
+ * Filters: 5+ words, 20-500 chars, factual statements (no questions/commands)
+ * Max 5 sentences returned
+ */
+function extractMeaningfulSentences(text) {
+  if (!text || typeof text !== 'string') {
+    return [];
   }
+  
+  return text
+    .replace(/([.!?])\s+/g, '$1|SPLIT|')
+    .split('|SPLIT|')
+    .map(s => s.trim())
+    .filter(s => {
+      const wordCount = s.split(/\s+/).length;
+      return (
+        s.length >= 20 &&
+        s.length <= 500 &&
+        wordCount >= 5 &&
+        !s.toLowerCase().startsWith('what ') &&
+        !s.toLowerCase().startsWith('how ') &&
+        !s.toLowerCase().startsWith('why ') &&
+        !s.toLowerCase().startsWith('please ') &&
+        !s.endsWith('?')
+      );
+    })
+    .slice(0, 5);
 }
 
+/**
+ * Fetch Grokipedia article by slug via backend API
+ */
 export async function fetchGrokipediaArticle(slug) {
   try {
-    console.log(`Fetching Grokipedia article for: ${slug}`);
+    const backendUrl = `${BACKEND_URL}/api/scraper/grokipedia?slug=${encodeURIComponent(slug)}`;
+    console.log(`Fetching Grokipedia (via backend): ${backendUrl}`);
     
-    // Use web scraping directly (more reliable than API with CORS issues)
-    const { text, title, url } = await scrapeGrokipediaPage(slug);
+    const response = await fetch(backendUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
     
-    // Split into sentences and take first 20
-    const sentences = text
-      .split(/(?<=[.!?])\s+/)
-      .filter(s => s.trim().length > 30)
-      .slice(0, 20);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
     
+    const data = await response.json();
+    console.log(`✓ Grokipedia (backend): ${data.title} (${data.contentLength} chars)`);
+    
+    // Extract 5 meaningful sentences from full content
+    const sentences = extractMeaningfulSentences(data.content);
     const limitedText = sentences.join(' ');
     
-    console.log(`✓ Grokipedia: ${sentences.length} sentences (${limitedText.length} chars)`);
+    if (limitedText.length === 0) {
+      throw new Error('No meaningful sentences extracted from content');
+    }
+    
+    console.log(`✓ Grokipedia: ${sentences.length} sentences extracted`);
     
     return {
       source: 'Grokipedia',
-      title: title || slug,
+      title: data.title,
       text: limitedText,
       sentenceCount: sentences.length,
-      url: url || `${GROKIPEDIA_WEB_BASE}/${slug}`,
+      url: data.url,
     };
+    
   } catch (error) {
-    console.error(`Grokipedia fetch failed:`, error);
-    throw error;
+    console.error(`Grokipedia fetch failed: ${error.message}`);
+    throw new Error(`Failed to fetch Grokipedia: ${error.message}`);
   }
 }

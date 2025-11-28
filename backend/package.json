@@ -1,0 +1,26 @@
+{
+  "name": "chainlens-dkg-backend",
+  "version": "1.0.0",
+  "description": "DKG Backend for ChainLens - Publishes Community Notes to OriginTrail",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "setup": "node src/scripts/setup.js"
+  },
+  "keywords": ["dkg", "origintrail", "blockchain", "community-notes"],
+  "author": "ChainLens Team",
+  "license": "MIT",
+  "dependencies": {
+    "dkg.js": "^8.0.14",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "winston": "^3.11.0",
+    "express-rate-limit": "^7.1.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
