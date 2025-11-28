@@ -293,6 +293,58 @@ function ComparisonDashboard() {
                       </div>
                     </div>
                     
+                    {/* Fetched Articles Preview */}
+                    {(result.wikiArticle || result.grokArticle) && (
+                      <div className="card">
+                        <h3 className="text-lg font-semibold mb-4">📚 Fetched Articles</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {/* Wikipedia Article */}
+                          {result.wikiArticle && (
+                            <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="font-bold text-blue-900">Wikipedia</h4>
+                                <span className="text-xs px-2 py-1 bg-blue-200 text-blue-800 rounded">
+                                  {result.wikiArticle.sentenceCount} sentences
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-700 mb-2 font-semibold">
+                                {result.wikiArticle.title}
+                              </div>
+                              <div className="text-xs text-gray-600 bg-white p-3 rounded border border-blue-100 
+                                            max-h-32 overflow-y-auto leading-relaxed">
+                                {result.wikiArticle.extract}
+                              </div>
+                              <div className="text-xs text-blue-600 mt-2">
+                                Total: {result.wikiArticle.fullLength} characters
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Grokipedia Article */}
+                          {result.grokArticle && (
+                            <div className="bg-purple-50 rounded-lg p-4 border-2 border-purple-200">
+                              <div className="flex items-center justify-between mb-3">
+                                <h4 className="font-bold text-purple-900">Grokipedia</h4>
+                                <span className="text-xs px-2 py-1 bg-purple-200 text-purple-800 rounded">
+                                  {result.grokArticle.sentenceCount} sentences
+                                </span>
+                              </div>
+                              <div className="text-sm text-gray-700 mb-2 font-semibold">
+                                {result.grokArticle.title}
+                              </div>
+                              <div className="text-xs text-gray-600 bg-white p-3 rounded border border-purple-100 
+                                            max-h-32 overflow-y-auto leading-relaxed">
+                                {result.grokArticle.extract}
+                              </div>
+                              <div className="text-xs text-purple-600 mt-2">
+                                Total: {result.grokArticle.fullLength} characters
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
                     {/* Alignment Score & Statistics */}
                     <div className="card">
                       <h3 className="text-lg font-semibold mb-4">Alignment Score & Statistics</h3>
