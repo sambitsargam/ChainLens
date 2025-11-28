@@ -293,24 +293,31 @@ function ComparisonDashboard() {
                 
                 {/* Loading Indicator with Real-Time Progress */}
                 {loading && (
-                  <div className="card bg-blue-50 border-2 border-blue-300">
+                  <div className="card bg-gradient-to-br from-blue-50 via-cyan-50 to-blue-50 border-2 border-blue-200 shadow-lg">
                     <div className="py-8">
-                      <div className="text-center mb-6">
-                        <div className="text-6xl mb-4 animate-pulse">🔍</div>
-                        <h3 className="text-xl font-semibold text-blue-900 mb-2">
+                      <div className="text-center mb-8">
+                        <div className="inline-block">
+                          <div className="text-6xl mb-4 animate-bounce">🔍</div>
+                        </div>
+                        <h3 className="text-2xl font-bold text-gradient bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-cyan-600 mb-2">
                           Processing Analysis
                         </h3>
-                        <p className="text-blue-700 mb-4">
-                          Real-time updates • {progressSteps.length} events received
+                        <p className="text-sm text-gray-600 font-medium">
+                          Real-time updates • <span className="text-blue-600 font-semibold">{progressSteps.length} steps</span> completed
                         </p>
                       </div>
                       
-                      {/* Progress Steps with Real-Time Updates */}
-                      <div className="space-y-3 max-w-3xl mx-auto">
+                      {/* Progress Timeline */}
+                      <div className="space-y-2 max-w-3xl mx-auto px-4">
+                        {/* Timeline connector */}
+                        <div className="absolute left-1/2 transform -translate-x-1/2 w-0.5 h-full bg-gradient-to-b from-blue-300 via-cyan-300 to-transparent opacity-30"></div>
+                        
                         {progressSteps.length === 0 ? (
-                          <div className="text-center text-gray-600 py-4">
-                            <div className="animate-spin text-3xl mb-2">⟳</div>
-                            <div>Initializing...</div>
+                          <div className="text-center py-8">
+                            <div className="inline-block">
+                              <div className="animate-spin text-4xl mb-3">⟳</div>
+                            </div>
+                            <div className="text-gray-600 font-medium">Initializing analysis...</div>
                           </div>
                         ) : (
                           progressSteps.slice(-6).map((progress, idx) => {
@@ -321,53 +328,88 @@ function ComparisonDashboard() {
                             return (
                               <div 
                                 key={idx}
-                                className={`flex items-start space-x-3 p-3 rounded-lg transition-all ${
-                                  isComplete ? 'bg-green-50 border-2 border-green-300' :
-                                  isError ? 'bg-red-50 border-2 border-red-300' :
-                                  'bg-white border border-blue-200'
+                                className={`flex items-start space-x-4 p-4 rounded-xl transition-all duration-300 hover:shadow-md ${
+                                  isComplete ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 shadow-sm' :
+                                  isError ? 'bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-300 shadow-sm' :
+                                  isProgress ? 'bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 shadow-md' :
+                                  'bg-gray-50 border border-gray-200'
                                 }`}
                               >
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold flex-shrink-0 ${
-                                  isComplete ? 'bg-green-500 text-white' :
-                                  isError ? 'bg-red-500 text-white' :
-                                  'bg-blue-500 text-white'
+                                {/* Step Indicator Circle */}
+                                <div className={`relative w-10 h-10 rounded-full flex items-center justify-center font-bold flex-shrink-0 shadow-md ${
+                                  isComplete ? 'bg-gradient-to-br from-green-500 to-emerald-600 text-white scale-100' :
+                                  isError ? 'bg-gradient-to-br from-red-500 to-pink-600 text-white scale-100' :
+                                  isProgress ? 'bg-gradient-to-br from-blue-500 to-cyan-600 text-white animate-pulse' :
+                                  'bg-gray-400 text-white'
                                 }`}>
-                                  {isComplete ? '✓' : isError ? '✗' : progress.step || idx + 1}
+                                  {isComplete ? (
+                                    <span className="text-lg">✓</span>
+                                  ) : isError ? (
+                                    <span className="text-lg">✕</span>
+                                  ) : isProgress ? (
+                                    <span className="text-sm animate-spin">◐</span>
+                                  ) : (
+                                    <span className="text-sm">{progress.step || idx + 1}</span>
+                                  )}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-semibold text-gray-900 flex items-center justify-between">
-                                    <span>{progress.message || progress.status}</span>
+                                
+                                {/* Step Content */}
+                                <div className="flex-1 min-w-0 pt-1">
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <div className={`font-bold text-sm ${
+                                      isComplete ? 'text-green-700' :
+                                      isError ? 'text-red-700' :
+                                      isProgress ? 'text-blue-700' :
+                                      'text-gray-700'
+                                    }`}>
+                                      {progress.message || progress.status}
+                                    </div>
                                     {isProgress && progress.percent && (
-                                      <span className="text-xs bg-blue-100 px-2 py-1 rounded ml-2">
+                                      <span className="text-xs font-semibold bg-gradient-to-r from-blue-500 to-cyan-500 text-white px-2.5 py-0.5 rounded-full whitespace-nowrap">
                                         {progress.percent}%
                                       </span>
                                     )}
                                   </div>
+                                  
+                                  {/* Progress Bar */}
+                                  {isProgress && progress.percent && (
+                                    <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2 overflow-hidden">
+                                      <div 
+                                        className="h-full bg-gradient-to-r from-blue-500 to-cyan-500 transition-all duration-300 rounded-full"
+                                        style={{ width: `${progress.percent}%` }}
+                                      ></div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Data Preview */}
                                   {progress.data && (
-                                    <div className="text-xs text-gray-600 mt-1 space-y-1">
+                                    <div className="text-xs text-gray-700 mt-2 space-y-1 bg-white/50 rounded-lg p-2.5 border border-gray-200/50">
                                       {progress.data.title && (
-                                        <div>📄 {progress.data.title}</div>
+                                        <div className="flex items-center gap-2"><span>📄</span> <span className="font-medium truncate">{progress.data.title}</span></div>
                                       )}
                                       {progress.data.charCount && (
-                                        <div>📊 {progress.data.charCount.toLocaleString()} characters, {progress.data.wordCount?.toLocaleString()} words</div>
+                                        <div className="flex items-center gap-2"><span>📊</span> <span>{progress.data.charCount.toLocaleString()} chars, {progress.data.wordCount?.toLocaleString()} words</span></div>
                                       )}
                                       {progress.data.globalSimilarity && (
-                                        <div>🎯 {(progress.data.globalSimilarity * 100).toFixed(1)}% similarity</div>
+                                        <div className="flex items-center gap-2"><span>🎯</span> <span className="font-medium text-green-600">{(progress.data.globalSimilarity * 100).toFixed(1)}% similarity</span></div>
                                       )}
                                       {progress.data.provider && (
-                                        <div>🧠 Using {progress.data.provider} embeddings</div>
+                                        <div className="flex items-center gap-2"><span>🧠</span> <span>Using <span className="font-medium">{progress.data.provider}</span> embeddings</span></div>
                                       )}
                                       {progress.label && progress.current && (
-                                        <div>
-                                          Sentence {progress.current}/{progress.total} 
-                                          {progress.similarity && ` • ${(progress.similarity * 100).toFixed(1)}% match`}
-                                        </div>
+                                        <div className="flex items-center gap-2"><span>⚙️</span> <span>Sentence {progress.current}/{progress.total}{progress.similarity && ` • ${(progress.similarity * 100).toFixed(1)}% match`}</span></div>
                                       )}
                                     </div>
                                   )}
                                 </div>
-                                {!isComplete && !isError && (
-                                  <div className="animate-spin text-blue-500 flex-shrink-0">⟳</div>
+                                
+                                {/* Status Icon */}
+                                {!isComplete && !isError && isProgress && (
+                                  <div className="flex-shrink-0 animate-bounce text-cyan-500">
+                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                                    </svg>
+                                  </div>
                                 )}
                               </div>
                             );

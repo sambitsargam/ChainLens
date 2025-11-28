@@ -8,6 +8,11 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const GROK_API_KEY = import.meta.env.VITE_GROK_API_KEY;
 
+console.log('🔧 LLM Service Configuration:');
+console.log('✓ OpenAI API Key:', OPENAI_API_KEY ? '✓ Configured' : '✗ Missing');
+console.log('✓ Gemini API Key:', GEMINI_API_KEY ? '✓ Configured' : '✗ Missing');
+console.log('✓ Grok API Key:', GROK_API_KEY ? '✓ Configured' : '✗ Missing');
+
 /**
  * Sleep utility for retries
  */
@@ -19,6 +24,10 @@ function sleep(ms) {
  * Classify with OpenAI with retry logic
  */
 export async function classifyWithOpenAI(grokSentence, wikiContext, retries = 3) {
+  if (!OPENAI_API_KEY) {
+    throw new Error('OpenAI API key not configured');
+  }
+
   const prompt = `You are a fact-checker. Classify this discrepancy:
 
 Grokipedia claim: "${grokSentence}"
@@ -40,13 +49,14 @@ Respond ONLY with JSON: {"label": "...", "explanation": "..."}`;
           model: 'gpt-3.5-turbo',
           messages: [{ role: 'user', content: prompt }],
           temperature: 0.3,
+          max_tokens: 500,
         }),
       });
 
       // Handle rate limiting
       if (response.status === 429) {
         const retryAfter = response.headers.get('retry-after') || Math.pow(2, attempt);
-        console.warn(`OpenAI rate limited, retrying after ${retryAfter}s (attempt ${attempt + 1}/${retries})`);
+        console.warn(`🔄 OpenAI rate limited, retrying after ${retryAfter}s (attempt ${attempt + 1}/${retries})`);
         await sleep(parseInt(retryAfter) * 1000);
         continue;
       }
@@ -73,6 +83,10 @@ Respond ONLY with JSON: {"label": "...", "explanation": "..."}`;
  * Classify with Gemini with retry logic and rate limiting
  */
 export async function classifyWithGemini(grokSentence, wikiContext, retries = 2) {
+  if (!GEMINI_API_KEY) {
+    throw new Error('Gemini API key not configured');
+  }
+
   const prompt = `Classify this discrepancy as ONE of: factual_inconsistency, missing_context, hallucination, bias, aligned
 
 Grokipedia: "${grokSentence}"
@@ -93,7 +107,7 @@ Respond with JSON: {"label": "...", "explanation": "..."}`;
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 2000,
+            maxOutputTokens: 500,
             responseMimeType: 'application/json',
           },
         }),
@@ -101,8 +115,9 @@ Respond with JSON: {"label": "...", "explanation": "..."}`;
 
       // Handle rate limiting
       if (response.status === 429) {
-        console.warn(`Gemini rate limited (attempt ${attempt + 1}/${retries}), skipping`);
-        throw new Error('Gemini rate limited');
+        console.warn(`🔄 Gemini rate limited (attempt ${attempt + 1}/${retries}), retrying...`);
+        await sleep(Math.pow(2, attempt) * 2000);
+        continue;
       }
 
       if (!response.ok) {
@@ -125,50 +140,144 @@ Respond with JSON: {"label": "...", "explanation": "..."}`;
       const content = candidate.content.parts[0].text.trim();
       return JSON.parse(content);
     } catch (error) {
-      if (attempt === retries - 1) {
-        console.warn(`Gemini classification failed: ${error.message}`);
-        return null;
-      }
+      if (attempt === retries - 1) throw error;
       await sleep(Math.pow(2, attempt) * 1000);
     }
   }
 }
 
 /**
- * Classify discrepancies with multi-model voting and fallbacks
+ * Classify with Grok (xAI) with retry logic
+ */
+export async function classifyWithGrok(grokSentence, wikiContext, retries = 2) {
+  if (!GROK_API_KEY) {
+    throw new Error('Grok API key not configured');
+  }
+
+  const prompt = `Classify this discrepancy as ONE of: factual_inconsistency, missing_context, hallucination, bias, aligned
+
+Grokipedia: "${grokSentence}"
+Wikipedia: "${wikiContext}"
+
+Respond with JSON only: {"label": "...", "explanation": "..."}`;
+
+  const url = 'https://api.x.ai/v1/chat/completions';
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GROK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'grok-beta',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.3,
+          max_tokens: 500,
+        }),
+      });
+
+      // Handle rate limiting
+      if (response.status === 429) {
+        console.warn(`🔄 Grok rate limited (attempt ${attempt + 1}/${retries}), retrying...`);
+        await sleep(Math.pow(2, attempt) * 2000);
+        continue;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Grok HTTP ${response.status}: ${errorData.error?.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+        throw new Error('Invalid Grok response structure: no choices');
+      }
+      
+      const content = data.choices[0].message.content.trim();
+      return JSON.parse(content);
+    } catch (error) {
+      if (attempt === retries - 1) throw error;
+      await sleep(Math.pow(2, attempt) * 1000);
+    }
+  }
+}
+
+/**
+ * Classify discrepancies with multi-model voting and consensus
  */
 export async function classifyDiscrepancies(discrepancies, wikiText) {
   const classified = [];
   const wikiContext = wikiText.substring(0, 500);
   
-  console.log(`Classifying ${discrepancies.length} discrepancies with OpenAI...`);
+  console.log(`🤖 Classifying ${discrepancies.length} discrepancies with 3-model consensus...`);
   
   for (const sentence of discrepancies.slice(0, 5)) {
     try {
       let openaiResult = null;
       let geminiResult = null;
+      let grokResult = null;
+      const errors = [];
       
-      // Try OpenAI first (more reliable)
-      try {
-        openaiResult = await classifyWithOpenAI(sentence, wikiContext);
-      } catch (error) {
-        console.warn(`OpenAI classification failed: ${error.message}`);
-      }
-      
-      // Try Gemini as backup (with rate limit tolerance)
-      try {
-        geminiResult = await classifyWithGemini(sentence, wikiContext);
-      } catch (error) {
-        console.warn(`Gemini classification failed: ${error.message}`);
-      }
-      
-      // Determine final classification
-      const finalLabel = openaiResult?.label || geminiResult?.label || 'factual_inconsistency';
-      const explanation = openaiResult?.explanation || geminiResult?.explanation || 'Could not fully classify';
-      
+      // Attempt all 3 models in parallel with error handling
+      const results = await Promise.allSettled([
+        classifyWithOpenAI(sentence, wikiContext).then(r => ({ model: 'openai', result: r })),
+        classifyWithGemini(sentence, wikiContext).then(r => ({ model: 'gemini', result: r })),
+        classifyWithGrok(sentence, wikiContext).then(r => ({ model: 'grok', result: r })),
+      ]);
+
+      // Process results
+      results.forEach((res, idx) => {
+        if (res.status === 'fulfilled') {
+          const { model, result } = res.value;
+          if (result) {
+            if (model === 'openai') openaiResult = result;
+            if (model === 'gemini') geminiResult = result;
+            if (model === 'grok') grokResult = result;
+            console.log(`✅ ${model.toUpperCase()}: ${result.label}`);
+          }
+        } else {
+          const modelNames = ['openai', 'gemini', 'grok'];
+          const errorMsg = res.reason?.message || res.reason || 'Unknown error';
+          errors.push(`${modelNames[idx]}: ${errorMsg}`);
+          console.warn(`❌ ${modelNames[idx].toUpperCase()} failed:`, res.reason);
+        }
+      });
+
+      // Determine consensus classification
+      const labels = [];
       const modelVotes = [];
-      if (openaiResult) modelVotes.push({ model: 'openai', label: openaiResult.label, explanation: openaiResult.explanation });
-      if (geminiResult) modelVotes.push({ model: 'gemini', label: geminiResult.label, explanation: geminiResult.explanation });
+      
+      if (openaiResult) {
+        labels.push(openaiResult.label);
+        modelVotes.push({ model: 'openai', label: openaiResult.label, explanation: openaiResult.explanation });
+      }
+      if (geminiResult) {
+        labels.push(geminiResult.label);
+        modelVotes.push({ model: 'gemini', label: geminiResult.label, explanation: geminiResult.explanation });
+      }
+      if (grokResult) {
+        labels.push(grokResult.label);
+        modelVotes.push({ model: 'grok', label: grokResult.label, explanation: grokResult.explanation });
+      }
+
+      // Get consensus or most common label
+      const labelCounts = {};
+      labels.forEach(label => {
+        labelCounts[label] = (labelCounts[label] || 0) + 1;
+      });
+      
+      const finalLabel = labels.length > 0 
+        ? Object.keys(labelCounts).sort((a, b) => labelCounts[b] - labelCounts[a])[0]
+        : 'factual_inconsistency';
+      
+      const explanations = modelVotes.map(v => v.explanation).filter(Boolean);
+      const explanation = explanations.length > 0 
+        ? explanations[0] 
+        : 'Could not fully classify';
       
       classified.push({
         type: finalLabel,
@@ -176,11 +285,13 @@ export async function classifyDiscrepancies(discrepancies, wikiText) {
         wikipedia_claim: null,
         explanation,
         model_votes: modelVotes,
+        consensus_count: modelVotes.length,
+        errors: errors.length > 0 ? errors : undefined,
       });
       
-      console.log(`✓ Classified: ${finalLabel}`);
+      console.log(`✓ Consensus: ${finalLabel} (${modelVotes.length}/3 models)`);
     } catch (error) {
-      console.error(`Classification error for sentence "${sentence.substring(0, 50)}...":`, error);
+      console.error(`❌ Classification error for sentence "${sentence.substring(0, 50)}...":`, error);
       
       // Add fallback classification
       classified.push({
@@ -189,9 +300,11 @@ export async function classifyDiscrepancies(discrepancies, wikiText) {
         wikipedia_claim: null,
         explanation: `Classification failed: ${error.message}`,
         model_votes: [],
+        consensus_count: 0,
       });
     }
   }
   
+  console.log(`✅ Classification complete: ${classified.length} discrepancies analyzed`);
   return classified;
 }

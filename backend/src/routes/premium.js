@@ -3,15 +3,16 @@
  * Endpoints protected by X402 payment
  */
 
-const express = require("express");
-const router = express.Router();
-const {
+import express from 'express';
+import {
   X402_CONFIG,
   isProtectedEndpoint,
   isFreeEndpoint,
   getEndpointConfig,
   format402Response,
-} = require("../services/x402-handler");
+} from '../services/x402-handler.js';
+
+const router = express.Router();
 
 /**
  * Check payment middleware
@@ -85,18 +86,49 @@ router.post("/api/analysis/advanced", async (req, res) => {
     const isPaid = req.headers["x-payment"] !== undefined;
 
     console.log(`✅ Advanced analysis request - User tier: ${userTier}, Paid: ${isPaid}`);
+    console.log(`   Analyzing ${claims.length} claims with 3-model consensus...`);
 
-    // TODO: Call analysis service with multi-LLM consensus
+    // Import LLM service
+    const llmService = await import('../services/llm.js');
+    
+    // Get context from sources or use default
+    const context = sources?.join(' ').substring(0, 500) || 'General knowledge base';
+    
+    // Classify all claims with consensus
+    const analysis = await llmService.classifyWithConsensus(claims, context);
+
+    // Calculate aggregate statistics
+    const labelCounts = {};
+    let totalConfidence = 0;
+    let successCount = 0;
+
+    analysis.forEach(item => {
+      if (item.model_count > 0) {
+        labelCounts[item.consensus_label] = (labelCounts[item.consensus_label] || 0) + 1;
+        totalConfidence += item.consensus_confidence;
+        successCount++;
+      }
+    });
+
+    const avgConfidence = successCount > 0 ? totalConfidence / successCount : 0;
+    const topLabel = Object.keys(labelCounts).sort((a, b) => labelCounts[b] - labelCounts[a])[0] || 'unknown';
+
     const result = {
       success: true,
       premium: true,
       analysis: {
-        verdict: "PARTIALLY_TRUE",
-        trustScore: 0.75,
-        consensus: {
-          openai: { verdict: "PARTIALLY_TRUE", confidence: 0.8 },
-          gemini: { verdict: "PARTIALLY_TRUE", confidence: 0.7 },
-          grok: { verdict: "TRUE", confidence: 0.6 },
+        claims_processed: analysis.length,
+        successful: successCount,
+        failed: analysis.length - successCount,
+        overall_consensus: topLabel,
+        average_confidence: parseFloat(avgConfidence.toFixed(2)),
+        model_results: analysis,
+        summary: {
+          factual_inconsistency: labelCounts['factual_inconsistency'] || 0,
+          missing_context: labelCounts['missing_context'] || 0,
+          hallucination: labelCounts['hallucination'] || 0,
+          bias: labelCounts['bias'] || 0,
+          aligned: labelCounts['aligned'] || 0,
         },
         timestamp: new Date().toISOString(),
       },
@@ -104,6 +136,7 @@ router.post("/api/analysis/advanced", async (req, res) => {
 
     res.json(result);
   } catch (error) {
+    console.error('❌ Advanced analysis error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -246,4 +279,4 @@ router.get("/api/premium/pricing", (req, res) => {
   res.json(pricing);
 });
 
-module.exports = router;
+export default router;

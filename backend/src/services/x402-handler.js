@@ -3,8 +3,8 @@
  * Handles HTTP 402 Payment Required responses and payment verification
  */
 
-const { paymentMiddleware } = require("x402-express");
-const X402_CONFIG = require("../config/x402-config");
+import { paymentMiddleware } from "x402-express";
+import X402_CONFIG from "../config/x402-config.js";
 
 /**
  * Initialize X402 payment middleware
@@ -111,7 +111,7 @@ const format402Response = (endpoint, config) => {
   };
 };
 
-module.exports = {
+export {
   X402_CONFIG,
   initializeX402Middleware,
   hasValidPayment,
