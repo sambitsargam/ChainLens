@@ -5,13 +5,14 @@ import { fetchGrokipediaArticle } from '../services/grokipedia';
 import { compareArticles } from '../services/comparison';
 import { classifyDiscrepancies } from '../services/llm';
 import { publishToDKG, saveCommunityNoteToHistory } from '../services/dkg';
-import TopicList from '../components/TopicList';
+import CustomTopicSelector from '../components/CustomTopicSelector';
 import AlignmentScoreBadge from '../components/AlignmentScoreBadge';
 import DiscrepancyList from '../components/DiscrepancyList';
 
 function ComparisonDashboard() {
   const [topics, setTopics] = useState([]);
   const [selectedTopic, setSelectedTopic] = useState(null);
+  const [customTopics, setCustomTopics] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -38,6 +39,17 @@ function ComparisonDashboard() {
       console.error('Error loading topics:', err);
       setError('Failed to load topics');
     }
+  };
+  
+  const handleCustomTopic = (customTopic) => {
+    // Add custom topic to the list
+    setCustomTopics([...customTopics, customTopic]);
+    // Select the custom topic
+    setSelectedTopic(customTopic);
+  };
+  
+  const getAllTopics = () => {
+    return [...topics, ...customTopics];
   };
   
   const loadExistingNotes = async (topicName) => {
@@ -222,10 +234,11 @@ function ComparisonDashboard() {
           {/* Left Sidebar: Topic Selection */}
           <div className="lg:col-span-1">
             <div className="card sticky top-8">
-              <TopicList
-                topics={topics}
+              <CustomTopicSelector
+                topics={getAllTopics()}
                 onSelectTopic={setSelectedTopic}
                 selectedTopicId={selectedTopic?.id}
+                onCustomTopic={handleCustomTopic}
               />
             </div>
           </div>

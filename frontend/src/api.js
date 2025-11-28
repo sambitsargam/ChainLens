@@ -34,6 +34,36 @@ const TOPICS = [
     wikiTitle: 'Quantum_computing',
     grokSlug: 'Quantum_computing',
   },
+  {
+    id: 6,
+    name: 'Machine Learning',
+    wikiTitle: 'Machine_learning',
+    grokSlug: 'Machine_learning',
+  },
+  {
+    id: 7,
+    name: 'Renewable Energy',
+    wikiTitle: 'Renewable_energy',
+    grokSlug: 'Renewable_energy',
+  },
+  {
+    id: 8,
+    name: 'Deep Learning',
+    wikiTitle: 'Deep_learning',
+    grokSlug: 'Deep_learning',
+  },
+  {
+    id: 9,
+    name: 'Space Exploration',
+    wikiTitle: 'Space_exploration',
+    grokSlug: 'Space_exploration',
+  },
+  {
+    id: 10,
+    name: 'Biotechnology',
+    wikiTitle: 'Biotechnology',
+    grokSlug: 'Biotechnology',
+  },
 ];
 
 export const getTopics = async () => {
