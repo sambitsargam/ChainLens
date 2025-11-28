@@ -78,7 +78,8 @@ export async function classifyDiscrepancyWithGemini(input) {
   try {
     const prompt = buildClassificationPrompt(input);
     
-    const url = `https://generativelanguage.googleapis.com/v1/models/${llmConfig.gemini.model}:generateContent?key=${llmConfig.gemini.apiKey}`;
+    // Use v1beta for Gemini 1.5 models
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${llmConfig.gemini.model}:generateContent?key=${llmConfig.gemini.apiKey}`;
     
     const response = await axios.post(
       url,
@@ -134,9 +135,19 @@ export async function classifyDiscrepancyWithGemini(input) {
     };
   } catch (error) {
     console.error('Gemini classification error:', error.message);
+    console.error('Gemini API URL:', `https://generativelanguage.googleapis.com/v1beta/models/${llmConfig.gemini.model}:generateContent`);
+    console.error('Gemini model:', llmConfig.gemini.model);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', JSON.stringify(error.response.data).substring(0, 500));
+    }
     
     if (error.response?.status === 400) {
       throw new Error('Gemini API bad request - check your configuration');
+    }
+    
+    if (error.response?.status === 404) {
+      throw new Error(`Gemini model not found: ${llmConfig.gemini.model}. Try: gemini-1.5-flash, gemini-1.5-pro, gemini-pro`);
     }
     
     if (error.response?.status === 429) {

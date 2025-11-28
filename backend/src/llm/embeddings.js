@@ -52,7 +52,8 @@ export async function getGeminiEmbedding(text) {
   }
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1/models/${llmConfig.gemini.embeddingModel}:embedContent?key=${llmConfig.gemini.apiKey}`;
+    // Use v1beta for Gemini embeddings
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${llmConfig.gemini.embeddingModel}:embedContent?key=${llmConfig.gemini.apiKey}`;
     
     const response = await axios.post(
       url,

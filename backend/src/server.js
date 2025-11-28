@@ -91,6 +91,187 @@ app.get('/api/topics', (req, res) => {
 });
 
 /**
+ * POST /api/compare-and-publish/stream
+ * Streaming endpoint: fetch, compare, classify, and publish with real-time progress updates via SSE
+ */
+app.post('/api/compare-and-publish/stream', async (req, res) => {
+  const { topic, wikiTitle, grokSlug } = req.body;
+  
+  if (!topic || !wikiTitle || !grokSlug) {
+    return res.status(400).json({
+      error: 'Missing required fields: topic, wikiTitle, grokSlug',
+    });
+  }
+  
+  // Set up SSE headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+  
+  const sendEvent = (event, data) => {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+  
+  try {
+    console.log(`\n=== Starting streaming comparison for: ${topic} ===`);
+    sendEvent('start', { topic, timestamp: new Date().toISOString() });
+    
+    // Step 1: Fetch Wikipedia article
+    sendEvent('progress', { step: 1, status: 'fetching_wiki', message: 'Fetching Wikipedia article...' });
+    const wikiArticle = await fetchWikipediaFullArticle(wikiTitle);
+    sendEvent('progress', {
+      step: 1,
+      status: 'wiki_complete',
+      message: `✓ Wikipedia fetched: ${wikiArticle.text.length} characters`,
+      data: {
+        title: wikiArticle.title,
+        charCount: wikiArticle.text.length,
+        wordCount: wikiArticle.meta?.wordCount || wikiArticle.text.split(/\s+/).length,
+        extract: wikiArticle.text.substring(0, 300) + '...'
+      }
+    });
+    
+    // Step 2: Fetch Grokipedia article
+    sendEvent('progress', { step: 2, status: 'fetching_grok', message: 'Fetching Grokipedia article...' });
+    const grokArticle = await fetchGrokipediaArticle(grokSlug);
+    sendEvent('progress', {
+      step: 2,
+      status: 'grok_complete',
+      message: `✓ Grokipedia fetched: ${grokArticle.text.length} characters`,
+      data: {
+        title: grokArticle.title,
+        charCount: grokArticle.text.length,
+        wordCount: grokArticle.meta?.wordCount || grokArticle.text.split(/\s+/).length,
+        extract: grokArticle.text.substring(0, 300) + '...'
+      }
+    });
+    
+    // Step 3: Compare texts using semantic embeddings with progress updates
+    sendEvent('progress', { step: 3, status: 'comparing', message: 'Comparing articles with semantic embeddings...' });
+    
+    // Create progress callback for comparison
+    const onCompareProgress = (progressData) => {
+      sendEvent('progress', {
+        step: 3,
+        status: 'compare_progress',
+        message: progressData.message,
+        data: progressData
+      });
+    };
+    
+    const comparisonResult = await compareArticles(wikiArticle, grokArticle, onCompareProgress);
+    sendEvent('progress', {
+      step: 3,
+      status: 'compare_complete',
+      message: `✓ Comparison complete: ${(comparisonResult.globalSimilarity * 100).toFixed(1)}% similarity`,
+      data: {
+        globalSimilarity: comparisonResult.globalSimilarity,
+        method: comparisonResult.comparisonMetadata?.method,
+        provider: comparisonResult.comparisonMetadata?.provider,
+        addedCount: comparisonResult.addedInGrok.length,
+        missingCount: comparisonResult.missingInGrok.length
+      }
+    });
+    
+    // Step 4: Classify discrepancies with LLM ensemble
+    sendEvent('progress', { step: 4, status: 'classifying', message: 'Classifying discrepancies with LLM ensemble...' });
+    const analysis = await classifyDiscrepancies({
+      topic,
+      wikiArticle,
+      grokArticle,
+      comparisonResult,
+    });
+    sendEvent('progress', {
+      step: 4,
+      status: 'classify_complete',
+      message: `✓ Classification complete: ${analysis.discrepancies.length} discrepancies analyzed`,
+      data: {
+        alignmentScore: analysis.alignmentScore,
+        discrepancyCount: analysis.discrepancies.length
+      }
+    });
+    
+    // Step 5: Build Community Note
+    sendEvent('progress', { step: 5, status: 'building', message: 'Building Community Note...' });
+    const note = buildCommunityNote({
+      topic,
+      wikiArticle,
+      grokArticle,
+      analysis,
+    });
+    validateCommunityNote(note);
+    sendEvent('progress', { step: 5, status: 'build_complete', message: '✓ Community Note built and validated' });
+    
+    // Step 6: Publish to DKG
+    sendEvent('progress', { step: 6, status: 'publishing', message: 'Publishing to OriginTrail DKG...' });
+    let publishResult = null;
+    let ual = null;
+    
+    try {
+      publishResult = await publishNoteToDKG(note);
+      ual = publishResult.ual;
+      sendEvent('progress', { step: 6, status: 'publish_complete', message: `✓ Published to DKG: ${ual}`, data: { ual } });
+    } catch (dkgError) {
+      ual = `demo:${topic.toLowerCase().replace(/\s+/g, '-')}:${Date.now()}`;
+      sendEvent('progress', { step: 6, status: 'publish_demo', message: `⚠ Using demo UAL: ${ual}`, data: { ual } });
+    }
+    
+    // Step 7: Cache the note
+    cacheNote(topic, {
+      topic,
+      ual,
+      alignmentScore: analysis.alignmentScore,
+      discrepancyCount: analysis.discrepancies.length,
+      createdAt: new Date().toISOString(),
+    });
+    
+    // Send final complete event with full results
+    sendEvent('complete', {
+      success: true,
+      topic,
+      ual,
+      dkgPublished: publishResult !== null,
+      wikiArticle: {
+        title: wikiArticle.title,
+        extract: wikiArticle.text.substring(0, 300) + '...',
+        fullText: wikiArticle.text,
+        fullLength: wikiArticle.text.length,
+        sentenceCount: comparisonResult.stats.wikiSentenceCount,
+      },
+      grokArticle: {
+        title: grokArticle.title,
+        extract: grokArticle.text.substring(0, 300) + '...',
+        fullText: grokArticle.text,
+        fullLength: grokArticle.text.length,
+        sentenceCount: comparisonResult.stats.grokSentenceCount,
+      },
+      analysis: {
+        alignmentScore: analysis.alignmentScore,
+        discrepancyCount: analysis.discrepancies.length,
+        stats: analysis.stats,
+        comparisonMetadata: comparisonResult.comparisonMetadata || null,
+      },
+      discrepancies: analysis.discrepancies,
+      notePublicGraph: note.public,
+    });
+    
+    console.log('=== Streaming comparison complete ===\n');
+    res.end();
+    
+  } catch (error) {
+    console.error('Error in streaming compare-and-publish:', error);
+    sendEvent('error', {
+      error: error.message,
+      details: 'Failed to complete comparison and publication',
+      timestamp: new Date().toISOString()
+    });
+    res.end();
+  }
+});
+
+/**
  * POST /api/compare-and-publish
  * Main endpoint: fetch, compare, classify, and publish to DKG
  */
@@ -314,6 +495,7 @@ async function startServer() {
       console.log(`  GET  /api/health`);
       console.log(`  GET  /api/topics`);
       console.log(`  POST /api/compare-and-publish`);
+      console.log(`  POST /api/compare-and-publish/stream (SSE)`);
       console.log(`  GET  /api/notes/search?topic=<topic>`);
       console.log(`  GET  /api/notes/topics`);
       console.log(`  GET  /api/notes/:ual`);

@@ -16,7 +16,7 @@ function Layout({ children }) {
                 <span className="text-white font-bold text-xl">✓</span>
               </div>
               <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
-                Truth Alignment Hub
+                ChainLens
               </span>
             </Link>
             
@@ -60,7 +60,7 @@ function Layout({ children }) {
             <div>
               <h3 className="text-white font-semibold text-lg mb-3">About</h3>
               <p className="text-sm leading-relaxed">
-                Truth Alignment Hub compares Grokipedia and Wikipedia using multi-LLM ensemble analysis,
+                ChainLens compares Grokipedia and Wikipedia using multi-LLM ensemble analysis,
                 publishing verified Community Notes to the OriginTrail Decentralized Knowledge Graph.
               </p>
             </div>

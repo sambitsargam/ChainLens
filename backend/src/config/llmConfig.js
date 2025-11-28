@@ -21,13 +21,13 @@ export const llmConfig = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
-    model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+    model: process.env.GEMINI_MODEL || 'gemini-2.5-flash',
     endpoint: 'https://generativelanguage.googleapis.com/v1/models',
-    embeddingModel: 'text-embedding-004',
+    embeddingModel: process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004',
   },
   grok: {
     apiKey: process.env.GROK_API_KEY || '',
-    model: process.env.GROK_MODEL || 'mixtral-8x7b-32768',
+    model: process.env.GROK_MODEL || 'llama-3.1-8b-instant',
     endpoint: 'https://api.groq.com/openai/v1/chat/completions',
   },
 };

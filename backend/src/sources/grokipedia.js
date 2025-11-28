@@ -2,23 +2,77 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 
 /**
- * Grokipedia Text Fetcher (Text-Only via Web Scraping)
+ * Grokipedia Text Fetcher
  * 
- * Fetches and extracts plain text content from Grokipedia articles.
- * Uses Cheerio to parse HTML and extract article text.
+ * Fetches full article content from Grokipedia API or falls back to web scraping.
+ * Prioritizes the official API for complete, structured content.
  */
 
-const GROKIPEDIA_BASE = 'https://grok.x.ai/grokipedia';
+const GROKIPEDIA_API_BASE = 'https://grokipedia-api.com/page';
+const GROKIPEDIA_WEB_BASE = 'https://grok.x.ai/grokipedia';
 
 /**
- * Fetch Grokipedia article text for a given slug
+ * Fetch Grokipedia article using the official API
+ * 
+ * @param {string} slug - Grokipedia article slug
+ * @returns {Promise<Object>} Article object with full content
+ */
+export async function fetchGrokipediaArticleFromAPI(slug) {
+  try {
+    const url = `${GROKIPEDIA_API_BASE}/${encodeURIComponent(slug)}?extract_refs=true&citations=true`;
+    
+    console.log(`Fetching from Grokipedia API: ${url}`);
+    
+    const response = await axios.get(url, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'GrokipediaTruthAlignment/1.0',
+      },
+      timeout: 20000,
+    });
+    
+    const data = response.data;
+    
+    if (!data.content_text) {
+      throw new Error('No content_text in API response');
+    }
+    
+    // Normalize whitespace
+    const text = data.content_text.replace(/\s+/g, ' ').trim();
+    
+    return {
+      source: 'Grokipedia',
+      title: data.title || slug,
+      text,
+      meta: {
+        url: data.url || `https://grokipedia.com/page/${slug}`,
+        slug: data.slug || slug,
+        fetchedAt: new Date().toISOString(),
+        charCount: data.char_count || text.length,
+        wordCount: data.word_count || text.split(/\s+/).length,
+        referencesCount: data.references_count || 0,
+        references: data.references || [],
+      },
+    };
+  } catch (error) {
+    console.error(`Grokipedia API fetch failed for "${slug}":`, error.message);
+    
+    // Don't throw, let caller handle fallback
+    throw error;
+  }
+}
+
+/**
+ * Fetch Grokipedia article text via web scraping (fallback)
  * 
  * @param {string} slug - Grokipedia article slug (URL-friendly identifier)
  * @returns {Promise<Object>} Article object with source, title, text, and metadata
  */
-export async function fetchGrokipediaArticle(slug) {
+export async function fetchGrokipediaArticleFromWeb(slug) {
   try {
-    const url = `${GROKIPEDIA_BASE}/${slug}`;
+    const url = `${GROKIPEDIA_WEB_BASE}/${slug}`;
+    
+    console.log(`Fetching from Grokipedia web (fallback): ${url}`);
     
     const response = await axios.get(url, {
       headers: {
@@ -83,10 +137,12 @@ export async function fetchGrokipediaArticle(slug) {
         url,
         slug,
         fetchedAt: new Date().toISOString(),
+        charCount: text.length,
+        wordCount: text.split(/\s+/).length,
       },
     };
   } catch (error) {
-    console.error(`Error fetching Grokipedia article "${slug}":`, error.message);
+    console.error(`Error fetching Grokipedia web article "${slug}":`, error.message);
     
     if (error.response?.status === 404) {
       throw new Error(`Grokipedia article "${slug}" not found`);
@@ -97,6 +153,29 @@ export async function fetchGrokipediaArticle(slug) {
     }
     
     throw new Error(`Failed to fetch Grokipedia article: ${error.message}`);
+  }
+}
+
+/**
+ * Fetch Grokipedia article (tries API first, falls back to web scraping)
+ * 
+ * @param {string} slug - Grokipedia article slug
+ * @returns {Promise<Object>} Article object with full content
+ */
+export async function fetchGrokipediaArticle(slug) {
+  try {
+    // Try API first for full article with references
+    return await fetchGrokipediaArticleFromAPI(slug);
+  } catch (apiError) {
+    console.warn('Grokipedia API failed, falling back to web scraping');
+    
+    // Fall back to web scraping
+    try {
+      return await fetchGrokipediaArticleFromWeb(slug);
+    } catch (webError) {
+      // Both failed, throw the original API error with context
+      throw new Error(`Failed to fetch Grokipedia article via API and web: ${apiError.message}`);
+    }
   }
 }
 

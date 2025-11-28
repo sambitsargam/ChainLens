@@ -60,9 +60,10 @@ function sentenceSimilarity(s1, s2) {
  * @param {Array<string>} targetSentences - Target sentences
  * @param {number} threshold - Similarity threshold (default 0.65 for embeddings)
  * @param {string} label - Label for logging (e.g., 'added', 'missing')
+ * @param {Function} onProgress - Optional progress callback
  * @returns {Promise<Array<string>>} Sentences from source not found in target
  */
-async function findUnmatchedSentences(sourceSentences, targetSentences, threshold = 0.65, label = '') {
+async function findUnmatchedSentences(sourceSentences, targetSentences, threshold = 0.65, label = '', onProgress = null) {
   const unmatched = [];
   
   if (sourceSentences.length === 0 || targetSentences.length === 0) {
@@ -90,6 +91,19 @@ async function findUnmatchedSentences(sourceSentences, targetSentences, threshol
       } else {
         console.log(`    ✓ Matched (max similarity: ${(maxSimilarity * 100).toFixed(1)}%)`);
       }
+      
+      // Send progress update if callback provided
+      if (onProgress) {
+        onProgress({
+          label,
+          current: i + 1,
+          total: sourceSentences.length,
+          percent: Math.round(((i + 1) / sourceSentences.length) * 100),
+          matched: maxSimilarity >= threshold,
+          similarity: maxSimilarity,
+          message: `Analyzing ${label} sentence ${i + 1}/${sourceSentences.length} (${(maxSimilarity * 100).toFixed(1)}% similarity)`
+        });
+      }
     }
     
     console.log(`  ✓ Found ${unmatched.length} unmatched ${label} sentences (threshold: ${threshold})`);
@@ -97,7 +111,8 @@ async function findUnmatchedSentences(sourceSentences, targetSentences, threshol
     // Fallback to string similarity if embeddings fail
     console.warn(`  ⚠ Embedding comparison failed for ${label}, using string similarity:`, error.message);
     
-    for (const sourceSent of sourceSentences) {
+    for (let i = 0; i < sourceSentences.length; i++) {
+      const sourceSent = sourceSentences[i];
       let maxSimilarity = 0;
       
       for (const targetSent of targetSentences) {
@@ -111,6 +126,19 @@ async function findUnmatchedSentences(sourceSentences, targetSentences, threshol
       if (maxSimilarity < 0.7) {
         unmatched.push(sourceSent);
       }
+      
+      // Send progress update if callback provided
+      if (onProgress) {
+        onProgress({
+          label,
+          current: i + 1,
+          total: sourceSentences.length,
+          percent: Math.round(((i + 1) / sourceSentences.length) * 100),
+          matched: maxSimilarity >= 0.7,
+          similarity: maxSimilarity,
+          message: `Analyzing ${label} sentence ${i + 1}/${sourceSentences.length} (fallback: ${(maxSimilarity * 100).toFixed(1)}% similarity)`
+        });
+      }
     }
   }
   
@@ -122,9 +150,10 @@ async function findUnmatchedSentences(sourceSentences, targetSentences, threshol
  * 
  * @param {Object} wikiArticle - Wikipedia article object
  * @param {Object} grokArticle - Grokipedia article object
+ * @param {Function} onProgress - Optional progress callback for real-time updates
  * @returns {Promise<Object>} Comparison result with similarity and discrepancies
  */
-export async function compareArticles(wikiArticle, grokArticle) {
+export async function compareArticles(wikiArticle, grokArticle, onProgress = null) {
   const wikiText = wikiArticle.text || '';
   const grokText = grokArticle.text || '';
   
@@ -165,10 +194,10 @@ export async function compareArticles(wikiArticle, grokArticle) {
   console.log(`→ Split: ${wikiSentences.length} Wiki sentences, ${grokSentences.length} Grok sentences`);
   
   // Find sentences added in Grokipedia (not in Wikipedia) using embeddings
-  const addedInGrok = await findUnmatchedSentences(grokSentences, wikiSentences, 0.65, 'added');
+  const addedInGrok = await findUnmatchedSentences(grokSentences, wikiSentences, 0.65, 'added', onProgress);
   
   // Find sentences missing in Grokipedia (present in Wikipedia) using embeddings
-  const missingInGrok = await findUnmatchedSentences(wikiSentences, grokSentences, 0.65, 'missing');
+  const missingInGrok = await findUnmatchedSentences(wikiSentences, grokSentences, 0.65, 'missing', onProgress);
   
   return {
     globalSimilarity: Math.round(globalSimilarity * 100) / 100, // Round to 2 decimals

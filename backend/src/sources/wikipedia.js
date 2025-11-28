@@ -69,32 +69,46 @@ export async function fetchWikipediaFullArticle(title) {
     // Try the mobile-sections endpoint for more complete text
     const url = `${WIKIPEDIA_API_BASE}/page/mobile-sections/${encodeURIComponent(title)}`;
     
+    console.log(`Fetching full Wikipedia article: ${url}`);
+    
     const response = await axios.get(url, {
       headers: {
         'User-Agent': 'GrokipediaTruthAlignment/1.0',
       },
+      timeout: 15000,
     });
     
     const data = response.data;
     
     // Extract text from all sections
     let text = '';
+    let sectionCount = 0;
     
     if (data.lead?.sections?.[0]?.text) {
       // Remove HTML tags from lead section
-      text = data.lead.sections[0].text.replace(/<[^>]+>/g, ' ');
+      const leadText = data.lead.sections[0].text.replace(/<[^>]+>/g, ' ');
+      text = leadText;
+      sectionCount++;
     }
     
     if (data.remaining?.sections) {
       for (const section of data.remaining.sections) {
         if (section.text) {
-          text += ' ' + section.text.replace(/<[^>]+>/g, ' ');
+          const sectionText = section.text.replace(/<[^>]+>/g, ' ');
+          text += ' ' + sectionText;
+          sectionCount++;
         }
       }
     }
     
     // Normalize whitespace
     text = text.replace(/\s+/g, ' ').trim();
+    
+    if (!text || text.length < 100) {
+      throw new Error('Insufficient content extracted from Wikipedia mobile-sections API');
+    }
+    
+    console.log(`✓ Extracted ${sectionCount} sections, ${text.length} characters from Wikipedia`);
     
     return {
       source: 'Wikipedia',
@@ -104,12 +118,29 @@ export async function fetchWikipediaFullArticle(title) {
         url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`,
         fetchedAt: new Date().toISOString(),
         description: data.lead?.description || '',
+        charCount: text.length,
+        wordCount: text.split(/\s+/).length,
+        sectionCount,
       },
     };
   } catch (error) {
-    console.log('Full article fetch failed, falling back to summary');
-    // Fallback to summary
-    return fetchWikipediaArticle(title);
+    console.error(`Full article fetch failed for "${title}":`, error.message);
+    console.log('Attempting fallback to summary API...');
+    
+    try {
+      // Fallback to summary but enhance error handling
+      const summaryArticle = await fetchWikipediaArticle(title);
+      
+      // Warn if we only got summary
+      if (summaryArticle.text.length < 500) {
+        console.warn(`⚠ Only got ${summaryArticle.text.length} chars from Wikipedia summary for "${title}"`);
+      }
+      
+      return summaryArticle;
+    } catch (summaryError) {
+      // Both methods failed
+      throw new Error(`Failed to fetch Wikipedia article "${title}": ${error.message}`);
+    }
   }
 }
 

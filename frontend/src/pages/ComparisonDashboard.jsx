@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { getTopics, compareAndPublish, searchNotes } from '../api';
+import React, { useState, useEffect, useRef } from 'react';
+import { getTopics, compareAndPublish, compareAndPublishStream, searchNotes } from '../api';
 import TopicList from '../components/TopicList';
 import AlignmentScoreBadge from '../components/AlignmentScoreBadge';
 import DiscrepancyList from '../components/DiscrepancyList';
@@ -11,6 +11,10 @@ function ComparisonDashboard() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [existingNotes, setExistingNotes] = useState([]);
+  const [progressSteps, setProgressSteps] = useState([]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [partialData, setPartialData] = useState({});
+  const streamRef = useRef(null);
   
   useEffect(() => {
     loadTopics();
@@ -50,26 +54,75 @@ function ComparisonDashboard() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setProgressSteps([]);
+    setCurrentStep(0);
+    setPartialData({});
+    
+    // Close any existing stream
+    if (streamRef.current) {
+      streamRef.current.close();
+    }
     
     try {
-      const data = await compareAndPublish({
-        topic: selectedTopic.name,
-        wikiTitle: selectedTopic.wikiTitle,
-        grokSlug: selectedTopic.grokSlug,
-      });
-      
-      setResult(data);
-      
-      // Reload existing notes
-      await loadExistingNotes(selectedTopic.name);
+      // Use streaming API for real-time progress updates
+      streamRef.current = compareAndPublishStream(
+        {
+          topic: selectedTopic.name,
+          wikiTitle: selectedTopic.wikiTitle,
+          grokSlug: selectedTopic.grokSlug,
+        },
+        {
+          onStart: (data) => {
+            console.log('Stream started:', data);
+            setProgressSteps([{ step: 0, status: 'started', message: 'Starting analysis...' }]);
+          },
+          
+          onProgress: (data) => {
+            console.log('Progress update:', data);
+            setProgressSteps(prev => [...prev, data]);
+            setCurrentStep(data.step || prev.length);
+            
+            // Store partial data as it arrives
+            if (data.data) {
+              setPartialData(prev => ({
+                ...prev,
+                ...data.data,
+              }));
+            }
+          },
+          
+          onComplete: (data) => {
+            console.log('Stream complete:', data);
+            setResult(data);
+            setLoading(false);
+            
+            // Reload existing notes
+            loadExistingNotes(selectedTopic.name);
+          },
+          
+          onError: (errorData) => {
+            console.error('Stream error:', errorData);
+            setError(errorData.error || 'Failed to complete comparison');
+            setLoading(false);
+          },
+        }
+      );
       
     } catch (err) {
       console.error('Error running comparison:', err);
       setError(err.response?.data?.error || err.message || 'Failed to run comparison');
-    } finally {
       setLoading(false);
     }
   };
+  
+  // Cleanup stream on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.close();
+      }
+    };
+  }, []);
   
   return (
     <div className="min-h-screen bg-gray-50 py-8">
