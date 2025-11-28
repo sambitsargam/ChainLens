@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getTopics, compareAndPublish, compareAndPublishStream, searchNotes } from '../api';
+import { getTopics, searchNotes } from '../api';
+import { fetchWikipediaArticle } from '../services/wikipedia';
+import { fetchGrokipediaArticle } from '../services/grokipedia';
+import { compareArticles } from '../services/comparison';
+import { classifyDiscrepancies } from '../services/llm';
 import TopicList from '../components/TopicList';
 import AlignmentScoreBadge from '../components/AlignmentScoreBadge';
 import DiscrepancyList from '../components/DiscrepancyList';
@@ -14,7 +18,6 @@ function ComparisonDashboard() {
   const [progressSteps, setProgressSteps] = useState([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [partialData, setPartialData] = useState({});
-  const streamRef = useRef(null);
   
   useEffect(() => {
     loadTopics();
@@ -58,71 +61,114 @@ function ComparisonDashboard() {
     setCurrentStep(0);
     setPartialData({});
     
-    // Close any existing stream
-    if (streamRef.current) {
-      streamRef.current.close();
-    }
-    
     try {
-      // Use streaming API for real-time progress updates
-      streamRef.current = compareAndPublishStream(
-        {
+      // Step 1: Fetch Wikipedia article
+      setProgressSteps([{ step: 1, status: 'progress', message: 'Fetching Wikipedia article...' }]);
+      const wikiArticle = await fetchWikipediaArticle(selectedTopic.wikiTitle);
+      
+      // Step 2: Fetch Grokipedia article
+      setProgressSteps(prev => [...prev, { step: 2, status: 'progress', message: 'Fetching Grokipedia article...' }]);
+      const grokArticle = await fetchGrokipediaArticle(selectedTopic.grokSlug);
+      
+      // Step 3: Compare articles
+      setProgressSteps(prev => [...prev, { step: 3, status: 'progress', message: 'Comparing articles with embeddings...' }]);
+      const comparison = await compareArticles(wikiArticle, grokArticle, (progress) => {
+        setProgressSteps(prev => [...prev, { 
+          step: 3, 
+          status: 'progress', 
+          message: `Comparing sentence ${progress.current}/${progress.total}...`,
+          data: progress 
+        }]);
+      });
+      
+      // Step 4: Classify discrepancies
+      if (comparison.addedInGrok.length > 0) {
+        setProgressSteps(prev => [...prev, { step: 4, status: 'progress', message: 'Classifying discrepancies with LLMs...' }]);
+        const classified = await classifyDiscrepancies(comparison.addedInGrok, wikiArticle.text);
+        
+        // Step 5: Complete
+        setProgressSteps(prev => [...prev, { step: 5, status: 'complete', message: 'Analysis complete!' }]);
+        
+        const finalResult = {
+          success: true,
           topic: selectedTopic.name,
-          wikiTitle: selectedTopic.wikiTitle,
-          grokSlug: selectedTopic.grokSlug,
-        },
-        {
-          onStart: (data) => {
-            console.log('Stream started:', data);
-            setProgressSteps([{ step: 0, status: 'started', message: 'Starting analysis...' }]);
+          ual: `demo:${selectedTopic.name.toLowerCase().replace(/\s+/g, '-')}:${Date.now()}`,
+          dkgPublished: false,
+          wikiArticle: {
+            title: wikiArticle.title,
+            extract: wikiArticle.text.substring(0, 500),
+            fullLength: wikiArticle.text.length,
+            sentenceCount: wikiArticle.sentenceCount,
           },
-          
-          onProgress: (data) => {
-            console.log('Progress update:', data);
-            setProgressSteps(prev => [...prev, data]);
-            setCurrentStep(data.step || prev.length);
-            
-            // Store partial data as it arrives
-            if (data.data) {
-              setPartialData(prev => ({
-                ...prev,
-                ...data.data,
-              }));
-            }
+          grokArticle: {
+            title: grokArticle.title,
+            extract: grokArticle.text.substring(0, 500),
+            fullLength: grokArticle.text.length,
+            sentenceCount: grokArticle.sentenceCount,
           },
-          
-          onComplete: (data) => {
-            console.log('Stream complete:', data);
-            setResult(data);
-            setLoading(false);
-            
-            // Reload existing notes
-            loadExistingNotes(selectedTopic.name);
+          analysis: {
+            alignmentScore: comparison.globalSimilarity,
+            discrepancyCount: classified.length,
+            stats: {
+              ...comparison.stats,
+              discrepanciesAnalyzed: classified.length,
+            },
+            comparisonMetadata: {
+              method: 'semantic-embedding',
+              provider: 'openai',
+              embeddingDimension: 1536,
+            },
           },
-          
-          onError: (errorData) => {
-            console.error('Stream error:', errorData);
-            setError(errorData.error || 'Failed to complete comparison');
-            setLoading(false);
+          discrepancies: classified,
+        };
+        
+        setResult(finalResult);
+      } else {
+        // No discrepancies found
+        setProgressSteps(prev => [...prev, { step: 4, status: 'complete', message: 'No discrepancies found!' }]);
+        
+        const finalResult = {
+          success: true,
+          topic: selectedTopic.name,
+          ual: `demo:${selectedTopic.name.toLowerCase().replace(/\s+/g, '-')}:${Date.now()}`,
+          dkgPublished: false,
+          wikiArticle: {
+            title: wikiArticle.title,
+            extract: wikiArticle.text.substring(0, 500),
+            fullLength: wikiArticle.text.length,
+            sentenceCount: wikiArticle.sentenceCount,
           },
-        }
-      );
+          grokArticle: {
+            title: grokArticle.title,
+            extract: grokArticle.text.substring(0, 500),
+            fullLength: grokArticle.text.length,
+            sentenceCount: grokArticle.sentenceCount,
+          },
+          analysis: {
+            alignmentScore: comparison.globalSimilarity,
+            discrepancyCount: 0,
+            stats: comparison.stats,
+            comparisonMetadata: {
+              method: 'semantic-embedding',
+              provider: 'openai',
+              embeddingDimension: 1536,
+            },
+          },
+          discrepancies: [],
+        };
+        
+        setResult(finalResult);
+      }
+      
+      setLoading(false);
       
     } catch (err) {
       console.error('Error running comparison:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to run comparison');
+      setError(err.message || 'Failed to run comparison');
       setLoading(false);
+      setProgressSteps(prev => [...prev, { step: 0, status: 'error', message: `Error: ${err.message}` }]);
     }
   };
-  
-  // Cleanup stream on unmount
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.close();
-      }
-    };
-  }, []);
   
   return (
     <div className="min-h-screen bg-gray-50 py-8">
