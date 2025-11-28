@@ -1,0 +1,407 @@
+import React, { useState, useEffect } from 'react';
+import { getTopics, compareAndPublish, searchNotes } from '../api';
+import TopicList from '../components/TopicList';
+import AlignmentScoreBadge from '../components/AlignmentScoreBadge';
+import DiscrepancyList from '../components/DiscrepancyList';
+
+function ComparisonDashboard() {
+  const [topics, setTopics] = useState([]);
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
+  const [existingNotes, setExistingNotes] = useState([]);
+  
+  useEffect(() => {
+    loadTopics();
+  }, []);
+  
+  useEffect(() => {
+    if (selectedTopic) {
+      loadExistingNotes(selectedTopic.name);
+    }
+  }, [selectedTopic]);
+  
+  const loadTopics = async () => {
+    try {
+      const data = await getTopics();
+      setTopics(data.topics);
+    } catch (err) {
+      console.error('Error loading topics:', err);
+      setError('Failed to load topics');
+    }
+  };
+  
+  const loadExistingNotes = async (topicName) => {
+    try {
+      const data = await searchNotes(topicName);
+      setExistingNotes(data.notes || []);
+    } catch (err) {
+      console.error('Error loading existing notes:', err);
+    }
+  };
+  
+  const handleRunComparison = async () => {
+    if (!selectedTopic) {
+      setError('Please select a topic first');
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    
+    try {
+      const data = await compareAndPublish({
+        topic: selectedTopic.name,
+        wikiTitle: selectedTopic.wikiTitle,
+        grokSlug: selectedTopic.grokSlug,
+      });
+      
+      setResult(data);
+      
+      // Reload existing notes
+      await loadExistingNotes(selectedTopic.name);
+      
+    } catch (err) {
+      console.error('Error running comparison:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to run comparison');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  return (
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Comparison Dashboard</h1>
+          <p className="text-gray-600">
+            Select a topic, run analysis, and publish Community Notes to the DKG.
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Left Sidebar: Topic Selection */}
+          <div className="lg:col-span-1">
+            <div className="card sticky top-8">
+              <TopicList
+                topics={topics}
+                onSelectTopic={setSelectedTopic}
+                selectedTopicId={selectedTopic?.id}
+              />
+            </div>
+          </div>
+          
+          {/* Main Content */}
+          <div className="lg:col-span-2">
+            {selectedTopic ? (
+              <div className="space-y-6">
+                {/* Selected Topic Card */}
+                <div className="card">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                    {selectedTopic.name}
+                  </h2>
+                  
+                  <div className="mb-4 space-y-2 text-sm text-gray-600">
+                    <div>
+                      <span className="font-semibold">Wikipedia:</span> {selectedTopic.wikiTitle}
+                    </div>
+                    <div>
+                      <span className="font-semibold">Grokipedia:</span> {selectedTopic.grokSlug}
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={handleRunComparison}
+                    disabled={loading}
+                    className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center">
+                        <span className="animate-spin mr-2">⟳</span>
+                        Analyzing... (This may take 30-60 seconds)
+                      </span>
+                    ) : (
+                      'Run Comparison & Publish Note'
+                    )}
+                  </button>
+                </div>
+                
+                {/* Error Display */}
+                {error && (
+                  <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                    <div className="flex">
+                      <span className="text-red-800 font-semibold mr-2">✗</span>
+                      <div>
+                        <div className="font-semibold text-red-900">Error</div>
+                        <div className="text-red-700">{error}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Loading Indicator with Progress Steps */}
+                {loading && (
+                  <div className="card bg-blue-50 border-2 border-blue-300">
+                    <div className="py-8">
+                      <div className="text-center mb-6">
+                        <div className="text-6xl mb-4 animate-pulse">🔍</div>
+                        <h3 className="text-xl font-semibold text-blue-900 mb-2">
+                          Processing Analysis
+                        </h3>
+                        <p className="text-blue-700 mb-4">
+                          This may take 30-60 seconds...
+                        </p>
+                      </div>
+                      
+                      {/* Progress Steps */}
+                      <div className="space-y-3 max-w-2xl mx-auto">
+                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
+                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">1</div>
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900">Fetching Wikipedia Article</div>
+                            <div className="text-xs text-gray-600">Using Wikipedia REST API</div>
+                          </div>
+                          <div className="animate-spin text-blue-500">⟳</div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
+                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">2</div>
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900">Fetching Grokipedia Article</div>
+                            <div className="text-xs text-gray-600">Scraping content from Grokipedia</div>
+                          </div>
+                          <div className="animate-spin text-blue-500">⟳</div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
+                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">3</div>
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900">Semantic Comparison with Embeddings</div>
+                            <div className="text-xs text-gray-600">AI-powered similarity analysis using OpenAI/Gemini</div>
+                          </div>
+                          <div className="animate-spin text-blue-500">⟳</div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
+                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">4</div>
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900">LLM Ensemble Classification</div>
+                            <div className="text-xs text-gray-600">OpenAI + Gemini + Groq analyzing discrepancies</div>
+                          </div>
+                          <div className="animate-spin text-blue-500">⟳</div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
+                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">5</div>
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900">Building Community Note</div>
+                            <div className="text-xs text-gray-600">Generating JSON-LD structure</div>
+                          </div>
+                          <div className="animate-spin text-blue-500">⟳</div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-3 p-3 bg-white rounded-lg">
+                          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">6</div>
+                          <div className="flex-1">
+                            <div className="font-semibold text-gray-900">Publishing to DKG</div>
+                            <div className="text-xs text-gray-600">Creating Knowledge Asset on OriginTrail</div>
+                          </div>
+                          <div className="animate-spin text-blue-500">⟳</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Results Display */}
+                {result && (
+                  <div className="space-y-6">
+                    {/* Success Banner */}
+                    <div className="bg-green-50 border-2 border-green-300 rounded-lg p-6">
+                      <div className="flex items-start">
+                        <span className="text-4xl mr-4">✓</span>
+                        <div className="flex-1">
+                          <h3 className="text-2xl font-bold text-green-900 mb-3">
+                            Analysis Complete {result.dkgPublished ? '& Published to DKG' : '(Demo Mode)'}
+                          </h3>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div className="bg-white p-3 rounded-lg border border-green-200">
+                              <div className="text-xs font-semibold text-green-700 mb-1">TOPIC</div>
+                              <div className="text-lg font-bold text-gray-900">{result.topic}</div>
+                            </div>
+                            
+                            <div className="bg-white p-3 rounded-lg border border-green-200">
+                              <div className="text-xs font-semibold text-green-700 mb-1">ALIGNMENT</div>
+                              <div className="text-lg font-bold text-gray-900">
+                                {Math.round(result.analysis.alignmentScore * 100)}%
+                              </div>
+                            </div>
+                            
+                            <div className="bg-white p-3 rounded-lg border border-green-200">
+                              <div className="text-xs font-semibold text-green-700 mb-1">DISCREPANCIES</div>
+                              <div className="text-lg font-bold text-gray-900">
+                                {result.analysis.discrepancyCount} analyzed
+                              </div>
+                            </div>
+                            
+                            <div className="bg-white p-3 rounded-lg border border-green-200">
+                              <div className="text-xs font-semibold text-green-700 mb-1">LLM MODELS</div>
+                              <div className="text-sm font-semibold text-gray-900">
+                                OpenAI + Gemini + Groq
+                              </div>
+                            </div>
+                            
+                            {result.analysis.comparisonMetadata && (
+                              <div className="bg-white p-3 rounded-lg border border-green-200 md:col-span-2">
+                                <div className="text-xs font-semibold text-green-700 mb-1">COMPARISON METHOD</div>
+                                <div className="text-sm font-semibold text-gray-900">
+                                  {result.analysis.comparisonMetadata.method === 'semantic-embedding' ? (
+                                    <>
+                                      🧠 Semantic Embeddings via {result.analysis.comparisonMetadata.provider}
+                                      {result.analysis.comparisonMetadata.embeddingDimension && (
+                                        <span className="text-xs text-gray-600 ml-2">
+                                          ({result.analysis.comparisonMetadata.embeddingDimension}D vectors)
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    '📝 String Similarity (Fallback)'
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          <div className="bg-white p-3 rounded-lg border border-green-200">
+                            <div className="text-xs font-semibold text-green-700 mb-2">
+                              {result.dkgPublished ? 'KNOWLEDGE ASSET UAL' : 'DEMO UAL (DKG Not Connected)'}
+                            </div>
+                            <code className="text-xs bg-green-50 px-2 py-1 rounded block overflow-x-auto">
+                              {result.ual}
+                            </code>
+                            {!result.dkgPublished && (
+                              <div className="text-xs text-orange-600 mt-2">
+                                ⚠ Note: DKG node not available. Using demo UAL. Data is still analyzed correctly.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Alignment Score & Statistics */}
+                    <div className="card">
+                      <h3 className="text-lg font-semibold mb-4">Alignment Score & Statistics</h3>
+                      <div className="mb-6">
+                        <AlignmentScoreBadge score={result.analysis.alignmentScore} />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-blue-50 p-4 rounded-lg border-2 border-blue-200">
+                          <div className="text-xs font-semibold text-blue-700 mb-1">WIKIPEDIA</div>
+                          <div className="text-3xl font-bold text-blue-900">
+                            {result.analysis.stats.wikiSentenceCount}
+                          </div>
+                          <div className="text-xs text-blue-600 mt-1">sentences</div>
+                        </div>
+                        
+                        <div className="bg-purple-50 p-4 rounded-lg border-2 border-purple-200">
+                          <div className="text-xs font-semibold text-purple-700 mb-1">GROKIPEDIA</div>
+                          <div className="text-3xl font-bold text-purple-900">
+                            {result.analysis.stats.grokSentenceCount}
+                          </div>
+                          <div className="text-xs text-purple-600 mt-1">sentences</div>
+                        </div>
+                        
+                        <div className="bg-orange-50 p-4 rounded-lg border-2 border-orange-200">
+                          <div className="text-xs font-semibold text-orange-700 mb-1">ADDED IN GROK</div>
+                          <div className="text-3xl font-bold text-orange-900">
+                            {result.analysis.stats.addedCount}
+                          </div>
+                          <div className="text-xs text-orange-600 mt-1">unique claims</div>
+                        </div>
+                        
+                        <div className="bg-red-50 p-4 rounded-lg border-2 border-red-200">
+                          <div className="text-xs font-semibold text-red-700 mb-1">ANALYZED</div>
+                          <div className="text-3xl font-bold text-red-900">
+                            {result.analysis.stats.discrepanciesAnalyzed || result.analysis.discrepancyCount}
+                          </div>
+                          <div className="text-xs text-red-600 mt-1">discrepancies</div>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                        <div className="text-sm text-gray-700">
+                          <span className="font-semibold">Similarity Score:</span> {Math.round(result.analysis.alignmentScore * 100)}% 
+                          <span className="ml-4 text-gray-600">
+                            ({result.analysis.alignmentScore >= 0.8 ? '✓ High alignment' : 
+                              result.analysis.alignmentScore >= 0.6 ? '⚠ Moderate alignment' : 
+                              '⚠ Low alignment - significant differences detected'})
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Discrepancies */}
+                    <div className="card">
+                      <h3 className="text-lg font-semibold mb-4">
+                        Discrepancies ({result.discrepancies.length})
+                      </h3>
+                      <DiscrepancyList discrepancies={result.discrepancies} />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Existing Notes */}
+                {existingNotes.length > 0 && (
+                  <div className="card">
+                    <h3 className="text-lg font-semibold mb-4">
+                      Previous Notes for this Topic ({existingNotes.length})
+                    </h3>
+                    <div className="space-y-3">
+                      {existingNotes.map((note, index) => (
+                        <div
+                          key={index}
+                          className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <AlignmentScoreBadge score={note.alignmentScore} />
+                            <span className="text-xs text-gray-500">
+                              {new Date(note.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-600 mt-2">
+                            <span className="font-semibold">UAL:</span>
+                            <code className="ml-2 bg-gray-100 px-2 py-1 rounded text-xs">
+                              {note.ual}
+                            </code>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="card text-center py-12">
+                <div className="text-6xl mb-4">📋</div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  Select a Topic to Begin
+                </h3>
+                <p className="text-gray-600">
+                  Choose a topic from the list on the left to start comparing articles.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ComparisonDashboard;
