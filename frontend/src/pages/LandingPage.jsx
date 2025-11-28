@@ -139,17 +139,17 @@ function LandingPage() {
                             group-hover:scale-110 transition-transform">
                 <span className="text-white text-2xl font-bold">⛓</span>
               </div>
-              <h3 className="text-2xl font-bold mb-4 text-white">DKG Publication</h3>
+              <h3 className="text-2xl font-bold mb-4 text-white">DKG Publication & Knowledge Retriever</h3>
               <p className="text-gray-400 leading-relaxed mb-4">
                 Publish structured <span className="text-blue-400">JSON-LD Community Notes</span> to 
-                OriginTrail DKG for permanent, verifiable storage.
+                OriginTrail DKG. Retrieve and verify knowledge assets for truth alignment.
               </p>
               <div className="flex flex-wrap gap-2">
                 <span className="text-xs px-3 py-1 bg-blue-500/10 text-blue-400 rounded-full border border-blue-500/20">
                   Blockchain UAL
                 </span>
                 <span className="text-xs px-3 py-1 bg-cyan-500/10 text-cyan-400 rounded-full border border-cyan-500/20">
-                  Immutable
+                  Knowledge Retriever
                 </span>
               </div>
             </div>
@@ -198,8 +198,17 @@ function LandingPage() {
                             flex items-center justify-center group-hover:scale-110 transition-transform border border-blue-500/30">
                 <span className="text-3xl">⛓</span>
               </div>
-              <div className="text-sm font-semibold text-gray-300 mb-1">OriginTrail</div>
-              <div className="text-xs text-gray-500">Decentralized DKG</div>
+              <div className="text-sm font-semibold text-gray-300 mb-1">OriginTrail DKG</div>
+              <div className="text-xs text-gray-500">Decentralized Knowledge</div>
+            </div>
+            
+            <div className="text-center group">
+              <div className="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-2xl 
+                            flex items-center justify-center group-hover:scale-110 transition-transform border border-amber-500/30">
+                <span className="text-3xl">💳</span>
+              </div>
+              <div className="text-sm font-semibold text-gray-300 mb-1">X402 Payments</div>
+              <div className="text-xs text-gray-500">Blockchain Transactions</div>
             </div>
           </div>
           
