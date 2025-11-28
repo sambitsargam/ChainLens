@@ -1,13 +1,14 @@
 # 🔗 ChainLens
 
-Compare Wikipedia vs Grokipedia articles using **3 AI models in parallel** and publish verified insights to the OriginTrail DKG.
+Compare Wikipedia vs Grokipedia articles using **3 AI models in parallel**, publish verified insights to OriginTrail DKG, and monetize with **X402 payments**.
 
 ## ✨ Key Features
 
 - **Multi-Model LLM Analysis** - OpenAI, Gemini, Grok working together in parallel
 - **Consensus Voting** - Majority voting system for high-confidence results
 - **DKG Publishing** - Immutable knowledge assets on OriginTrail blockchain
-- **Clean UI** - Text-focused interface, no distractions
+- **X402 Premium Payments** - Cryptocurrency-based subscription via HTTP 402 protocol
+- **Knowledge Retriever** - Smart content extraction and analysis
 - **Real-time Classification** - Detects: factual inconsistencies, missing context, bias, hallucinations
 
 ---
@@ -18,6 +19,7 @@ Compare Wikipedia vs Grokipedia articles using **3 AI models in parallel** and p
 - Node.js v18+
 - API Keys: OpenAI, Google Gemini, Grok
 - OriginTrail Edge Node (local or remote)
+- X402 wallet address (for payments)
 
 ### Setup
 
@@ -26,7 +28,7 @@ Compare Wikipedia vs Grokipedia articles using **3 AI models in parallel** and p
 cd backend
 npm install
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys and X402 config
 npm start  # Runs on port 3001
 ```
 
@@ -39,10 +41,11 @@ npm run dev  # Runs on port 5173
 
 ### Usage
 1. Open http://localhost:5173
-2. Select a topic (AI, Blockchain, etc.)
-3. Click "Compare with Wikipedia"
-4. View results with all 3 model votes
+2. Select a topic or create a custom one
+3. Click "Run Comparison & Publish Note"
+4. View results with all 3 model consensus votes
 5. Publish to OriginTrail DKG
+6. (Optional) Upgrade to Premium via X402 for unlimited publishing
 
 ---
 
@@ -51,7 +54,7 @@ npm run dev  # Runs on port 5173
 ```
 Wikipedia Article
        │
-       ├─→ [Extract Text] ←─ Grokipedia Article
+       ├─→ [Knowledge Retriever] ←─ Grokipedia Article
        │
        ▼
 Identify Discrepancies
@@ -71,6 +74,27 @@ Publish to DKG (OriginTrail)
 
 ---
 
+## 💳 X402 Premium Features
+
+### Subscription Tiers
+
+| Feature | Free | Premium | Pro |
+|---------|------|---------|-----|
+| DKG Publishing | 5/month | Unlimited | Unlimited |
+| Advanced Analysis | 3/month | Unlimited | Unlimited |
+| Grokipedia Access | 10/month | Unlimited | Unlimited |
+| Batch Verification | 1/month | Unlimited | Unlimited |
+| Support | Community | Standard | 24/7 Priority |
+| Price | Free | $19.99/mo | $49.99/mo |
+
+### X402 Payment Integration
+- Secure HTTP 402 payment protocol
+- Base Sepolia network
+- USDC payments
+- Blockchain-verified transactions
+
+---
+
 ## 🔧 Environment Setup
 
 ### Backend `.env`
@@ -80,11 +104,24 @@ NODE_ENV=development
 OPENAI_API_KEY=sk-...
 GEMINI_API_KEY=AIzaSy...
 GROK_API_KEY=gsk_...
+
+# X402 Configuration
+X402_WALLET_ADDRESS=0x44CBd027D65F0Aeb0AC3deEb02a3247871F00f48
+X402_FACILITATOR_URL=https://x402.org/facilitator
+X402_NETWORK=base-sepolia
+
+# DKG Configuration
+DKG_ENDPOINT=http://localhost
+DKG_PORT=8900
+DKG_ENVIRONMENT=local
 ```
 
 ### Frontend `.env`
 ```env
 VITE_API_BASE_URL=http://localhost:3001
+VITE_OPENAI_API_KEY=sk-...
+VITE_GEMINI_API_KEY=AIzaSy...
+VITE_GROK_API_KEY=gsk_...
 ```
 
 ---
@@ -95,23 +132,27 @@ VITE_API_BASE_URL=http://localhost:3001
 backend/
 ├── src/routes/
 │   ├── classify.js        # 3-model classification endpoint
-│   ├── llm-debug.js       # Testing/debugging endpoints
-│   ├── premium.js         # Premium features
+│   ├── premium.js         # X402 premium features
 │   └── scraper.js         # Content fetchers
+├── src/config/
+│   └── x402-config.js     # X402 payment configuration
 ├── src/services/
 │   ├── llm.js             # LLM service (all 3 models)
-│   └── publisher.js       # DKG publisher
+│   └── dkg.js             # OriginTrail publisher
 └── .env
 
 frontend/
 ├── src/pages/
 │   ├── ComparisonDashboard.jsx
+│   ├── PremiumPage.jsx
 │   └── LandingPage.jsx
 ├── src/services/
 │   ├── wikipedia.js
 │   ├── grokipedia.js
 │   ├── comparison.js
 │   └── dkg.js
+├── src/config/
+│   └── x402-config.js     # X402 frontend config
 └── .env
 ```
 
@@ -127,12 +168,7 @@ frontend/
 ### Manual Test
 ```bash
 # Check API configuration
-curl http://localhost:3001/api/llm-debug/status
-
-# Test all 3 models
-curl -X POST http://localhost:3001/api/llm-debug/test-all \
-  -H "Content-Type: application/json" \
-  -d '{"claim":"Test","context":"Context"}'
+curl http://localhost:3001/api/health
 
 # Test classification
 curl -X POST http://localhost:3001/api/classify \
@@ -147,9 +183,9 @@ curl -X POST http://localhost:3001/api/classify \
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/classify` | POST | Classify discrepancies with all 3 models |
-| `/api/llm-debug/status` | GET | Check API key configuration |
-| `/api/llm-debug/test-all` | POST | Test all 3 models |
-| `/api/analysis/advanced` | POST | Premium multi-claim analysis |
+| `/api/publishnote` | POST | Publish to DKG (requires X402 payment) |
+| `/api/analysis/advanced` | POST | Advanced analysis (X402 premium) |
+| `/api/batch-verify` | POST | Batch verification (X402 premium) |
 
 ---
 
@@ -163,21 +199,19 @@ curl -X POST http://localhost:3001/api/classify \
 
 ---
 
-## 🔐 Security
+## 🔐 Security & Payments
 
 - **API Keys**: Use environment variables only
 - **CORS**: Configure for production domains
 - **Rate Limiting**: Built-in with exponential backoff
+- **X402 Payments**: Blockchain-verified transactions
 - **DKG Keys**: Keep private keys secure
 
 ---
 
 ## 📚 Documentation
 
-- **[QUICK_REFERENCE.md](./QUICK_REFERENCE.md)** - 30-second overview
-- **[IMPLEMENTATION_COMPLETE.md](./IMPLEMENTATION_COMPLETE.md)** - Technical details
-- **[LLM_TESTING_GUIDE.md](./LLM_TESTING_GUIDE.md)** - Testing procedures
-- **[MULTI_MODEL_LLM_GUIDE.md](./MULTI_MODEL_LLM_GUIDE.md)** - Model integration
+See additional guides for detailed information on LLM testing, DKG publishing, and payment integration.
 
 ---
 
@@ -237,10 +271,11 @@ MIT License - see [LICENSE](./LICENSE)
 ## 🔗 Resources
 
 - [OriginTrail DKG](https://www.origintrail.io/)
+- [X402 Protocol](https://www.x402.org/)
 - [OpenAI API](https://platform.openai.com/)
 - [Google Gemini](https://ai.google.dev/)
-- [Grok (xAI)](https://www.x.ai/)
+- [Grok API](https://www.groq.com/)
 
 ---
 
-**Built for Truth** • Multi-Model LLM Consensus • OriginTrail DKG • 2025
+**Built for Truth** • Multi-Model LLM Consensus • X402 Payments • OriginTrail DKG • 2025
