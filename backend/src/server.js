@@ -12,6 +12,7 @@ import { initializeDKG } from './config/dkg.js';
 import dkgRoutes from './routes/dkg.js';
 import publishnoteRoutes from './routes/publishnote.js';
 import scraperRoutes from './routes/scraper.js';
+import premiumRoutes from './routes/premium.js';
 
 const app = express();
 
@@ -57,6 +58,7 @@ app.use('/api/', limiter);
 app.use('/api/dkg', dkgRoutes);
 app.use('/api/publishnote', publishnoteRoutes);
 app.use('/api/scraper', scraperRoutes);
+app.use('/api', premiumRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -121,6 +123,10 @@ app.listen(PORT, () => {
   logger.info(`DKG Endpoint: ${config.dkg.endpoint}`);
   logger.info(`Blockchain: ${config.dkg.blockchain}`);
   logger.info(`Wallet: ${config.wallet.publicKey || 'NOT CONFIGURED'}`);
+  logger.info(`🔐 X402 Premium: Configured (disabled by default - enable in .env)`);
+  logger.info(`   Receiver: ${process.env.X402_WALLET_ADDRESS || 'Not set'}`);
+  logger.info(`   Network: ${process.env.X402_NETWORK || 'base-sepolia'}`);
+  logger.info(`   Premium Endpoints: /api/publishnote, /api/analysis/advanced, /api/grokipedia-pro, /api/batch-verify`);
   logger.info('='.repeat(60));
   
   if (!config.wallet.privateKey) {

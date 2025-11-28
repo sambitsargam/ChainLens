@@ -9,16 +9,23 @@
     "dev": "node --watch src/server.js",
     "setup": "node src/scripts/setup.js"
   },
-  "keywords": ["dkg", "origintrail", "blockchain", "community-notes"],
+  "keywords": [
+    "dkg",
+    "origintrail",
+    "blockchain",
+    "community-notes"
+  ],
   "author": "ChainLens Team",
   "license": "MIT",
   "dependencies": {
-    "dkg.js": "^8.0.14",
-    "express": "^4.18.2",
+    "@coinbase/x402": "^0.7.3",
     "cors": "^2.8.5",
+    "dkg.js": "^8.0.14",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
     "winston": "^3.11.0",
-    "express-rate-limit": "^7.1.5"
+    "x402-express": "^0.7.3"
   },
   "engines": {
     "node": ">=18.0.0"
