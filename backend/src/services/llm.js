@@ -4,9 +4,14 @@
  * Includes retry logic, rate limiting, and graceful fallbacks
  */
 
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GROK_API_KEY = process.env.GROK_API_KEY;
+
+// Initialize Gemini client
+const geminiClient = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 
 console.log('🤖 Backend LLM Service Configuration:');
 console.log('  OpenAI:', OPENAI_API_KEY ? '✓ Configured' : '✗ Missing');
@@ -74,10 +79,10 @@ Respond ONLY with JSON: {"label": "...", "confidence": 0.0-1.0, "explanation": "
 }
 
 /**
- * Classify with Gemini
+ * Classify with Gemini using official SDK
  */
 export async function classifyWithGemini(claim, context, retries = 2) {
-  if (!GEMINI_API_KEY) {
+  if (!geminiClient) {
     throw new Error('Gemini API key not configured');
   }
 
@@ -86,46 +91,20 @@ export async function classifyWithGemini(claim, context, retries = 2) {
 Claim: "${claim}"
 Context: "${context}"
 
-Respond with JSON: {"label": "...", "confidence": 0.0-1.0, "explanation": "..."}`;
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+Respond with JSON only: {"label": "...", "confidence": 0.0-1.0, "explanation": "..."}`;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.3,
-            maxOutputTokens: 200,
-            responseMimeType: 'application/json',
-          },
-        }),
-      });
-
-      if (response.status === 429) {
-        const waitTime = Math.pow(2, attempt + 1) * 3000;
-        console.warn(`⏳ Gemini rate limited (${attempt + 1}/${retries}), waiting ${waitTime}ms...`);
-        await sleep(waitTime);
-        continue;
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`HTTP ${response.status}: ${errorData.error?.message || ''}`);
-      }
-
-      const data = await response.json();
-      const content = data.candidates[0].content.parts[0].text.trim();
-      return JSON.parse(content);
+      const model = geminiClient.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const content = response.text().trim();
+      const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
+      return JSON.parse(cleanedContent);
     } catch (error) {
       console.error(`❌ Gemini attempt ${attempt + 1} failed:`, error.message);
       if (attempt === retries - 1) throw error;
-      await sleep(Math.pow(2, attempt) * 1000);
+      await sleep(Math.pow(2, attempt) * 2000);
     }
   }
 }

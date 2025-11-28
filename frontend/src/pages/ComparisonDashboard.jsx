@@ -258,6 +258,43 @@ function ComparisonDashboard() {
                 onCustomTopic={handleCustomTopic}
               />
             </div>
+
+            {/* X402 Premium Info Card */}
+            <div className="card bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 mt-6 sticky top-80">
+              <div className="flex items-start gap-3 mb-3">
+                <span className="text-2xl">⭐</span>
+                <div>
+                  <h3 className="font-bold text-amber-900">Premium Features</h3>
+                  <p className="text-xs text-amber-700 mt-1">Unlock advanced analysis with X402</p>
+                </div>
+              </div>
+              
+              <ul className="space-y-2 mb-4 text-sm text-amber-900">
+                <li className="flex items-center gap-2">
+                  <span>✓</span>
+                  <span>Unlimited publishing</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span>✓</span>
+                  <span>Advanced analysis</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span>✓</span>
+                  <span>Batch verification</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span>✓</span>
+                  <span>Priority support</span>
+                </li>
+              </ul>
+
+              <button
+                onClick={() => window.location.href = '/premium'}
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold py-2 px-4 rounded-lg hover:shadow-lg transition-all hover:from-amber-600 hover:to-orange-600"
+              >
+                <span>💳 View Plans</span>
+              </button>
+            </div>
           </div>
           
           {/* Main Content */}
@@ -293,6 +330,14 @@ function ComparisonDashboard() {
                       'Run Comparison & Publish Note'
                     )}
                   </button>
+
+                  <a
+                    href="/premium"
+                    className="btn-secondary w-full mt-3 flex items-center justify-center gap-2 hover:shadow-lg transition-all"
+                  >
+                    <span className="text-lg">💳</span>
+                    <span>Upgrade to Premium (X402)</span>
+                  </a>
                 </div>
                 
                 {/* Error Display */}

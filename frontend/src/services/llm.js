@@ -95,7 +95,7 @@ Wikipedia: "${wikiContext}"
 Respond with JSON: {"label": "...", "explanation": "..."}`;
 
   // Use the correct Gemini API endpoint
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
@@ -136,12 +136,8 @@ Respond with JSON: {"label": "...", "explanation": "..."}`;
       }
       
       const candidate = data.candidates[0];
-      if (candidate.finishReason !== 'STOP' && candidate.finishReason !== 'END_TURN') {
-        throw new Error(`Gemini blocked: ${candidate.finishReason}`);
-      }
-      
       if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
-        throw new Error('Invalid Gemini response: no content');
+        throw new Error('Invalid Gemini response: no content parts');
       }
       
       const content = candidate.content.parts[0].text.trim();
